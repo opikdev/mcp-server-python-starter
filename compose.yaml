@@ -1,0 +1,12 @@
+name: mcp-server-python-starter
+
+services:
+  mcp:
+    build: .
+    environment:
+      MCP_AUTH_MODE: token
+      # Dev-only token. Replace it, or switch to MCP_AUTH_MODE=oauth, outside your machine.
+      MCP_AUTH_TOKENS: ${MCP_AUTH_TOKENS:-dev-token-change-me-0123}
+      MCP_PUBLIC_URL: http://localhost:${PORT:-3000}/mcp
+    ports:
+      - 127.0.0.1:${PORT:-3000}:3000

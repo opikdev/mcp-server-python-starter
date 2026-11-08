@@ -1,0 +1,1 @@
+"""Resources the server exposes."""

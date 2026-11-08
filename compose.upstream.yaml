@@ -1,0 +1,35 @@
+# A real notes API to try the notes tools against: api-hono-starter with Postgres.
+name: notes-upstream
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: api_owner
+      POSTGRES_PASSWORD: api_owner_dev_password
+      POSTGRES_DB: api
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -h 127.0.0.1 -U api_owner -d api]
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  migrate:
+    image: ghcr.io/opikdev/api-hono-starter:0.2.1
+    command: [sh, -c, node src/db/migrate.ts && node src/db/seed.ts]
+    environment:
+      MIGRATION_DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/api
+      SEED_DEMO_DATA: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: ghcr.io/opikdev/api-hono-starter:0.2.1
+    environment:
+      DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/api
+    ports:
+      - 127.0.0.1:${API_PORT:-3200}:3000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully

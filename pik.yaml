@@ -1,0 +1,58 @@
+schema: 1
+requires:
+  - name: uv
+    version: 0.13.0
+  - name: make
+  - name: docker
+prompts:
+  - name: name
+    message: Package name, in kebab-case
+    pattern: ^[a-z][a-z0-9-]{0,49}$
+    default: "{{dir}}"
+  - name: owner
+    message: GitHub owner, for README links, code owners, and the MCP Registry name
+    pattern: ^[A-Za-z0-9-]{1,39}$
+    optional: true
+replace:
+  - from: "opikdev/mcp-server-python-starter\ncd mcp-server-python-starter\n"
+    to: "{{owner}}/{{name}}\ncd {{name}}\n"
+    files: [README.md]
+  - from: opikdev/mcp-server-python-starter
+    to: "{{owner}}/{{name}}"
+    files: [README.md, pyproject.toml, server.json]
+  - from: 'authors = [{ name = "opikdev" }]'
+    to: 'authors = [{ name = "{{owner}}" }]'
+    files: [pyproject.toml]
+  - from: "@opikdev"
+    to: "@{{owner}}"
+    files: [.github/CODEOWNERS]
+  - from: '"mcp-server-python-starter"'
+    to: '"{{name}}"'
+    files: [pyproject.toml, server.json, uv.lock]
+  - from: 'mcp-server-python-starter = "mcp_app'
+    to: '{{name}} = "mcp_app'
+    files: [pyproject.toml]
+  - from: mcp-server-python-starter
+    to: "{{name}}"
+    files:
+      - Dockerfile
+      - Makefile
+      - compose.yaml
+      - docs/clients.md
+      - src/mcp_app/__init__.py
+      - src/mcp_app/cli.py
+      - src/mcp_app/server.py
+      - src/mcp_app/resources/docs.py
+      - tests/e2e/test_docker.py
+      - tests/e2e/test_package.py
+exclude:
+  - .baseline.sha256
+  - .github/workflows/baseline-check.yml
+setup:
+  - uv sync
+  - uv run ruff format --quiet .
+next:
+  - make inspect
+check:
+  - make verify
+  - make e2e

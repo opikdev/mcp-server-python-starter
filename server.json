@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.opikdev/mcp-server-python-starter",
+  "title": "MCP server Python starter",
+  "description": "Production-ready MCP server in Python, with stdio and Streamable HTTP, OAuth, and tool tests",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "mcp-server-python-starter",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
