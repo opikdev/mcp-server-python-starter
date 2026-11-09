@@ -32,7 +32,7 @@ A production-ready MCP server in Python, built on the official MCP Python SDK v2
 - Add each tool in its own module in `src/mcp_app/tools/` with a `register_*` function, call it from `src/mcp_app/server.py`, and test it through a real client in `tests/integration/`.
 - Give every tool typed, described parameters, a one-line docstring, `ToolAnnotations`, and a return type of `Annotated[CallToolResult, Model]`. Raise `ToolError` with a message the model can act on for expected failures.
 - Call backends through a client in `src/mcp_app/upstream/` with a timeout and a response model. Turn failures into `UpstreamError` messages, and never return credentials or raw upstream bodies to the model.
-- Never print to stdout, because stdio uses it for protocol messages. Log with `logging`, which writes JSON to stderr.
+- Never print to stdout, because stdio uses it for protocol messages. Log with `logging`, which writes JSON to stderr. Ruff's `T20` rule flags `print`.
 - Keep `server.json` in step with `pyproject.toml`. A test enforces this.
 - Add dependencies with `uv add`, and commit `uv.lock` in the same change.
 - Don't edit files listed in `.baseline.sha256`. They come from [opikdev/starters](https://github.com/opikdev/starters).

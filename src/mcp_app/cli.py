@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> None:
         configure_logging(load_log_level())
         anyio.run(_serve_http if args.http else _serve_stdio)
     except ConfigError as error:
-        print(f"Error: {error}", file=sys.stderr)
+        sys.stderr.write(f"Error: {error}\n")
         sys.exit(2)
     except KeyboardInterrupt:
         pass
