@@ -7,7 +7,9 @@ import signal
 import subprocess
 import sys
 import time
+import tomllib
 from collections.abc import Iterator
+from pathlib import Path
 
 import httpx2
 import pytest
@@ -39,7 +41,8 @@ def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedPr
 def test_prints_its_version() -> None:
     result = run("--version")
     assert result.returncode == 0
-    assert result.stdout.strip() == "0.1.0"
+    pyproject = tomllib.loads((Path(__file__).parents[2] / "pyproject.toml").read_text())
+    assert result.stdout.strip() == pyproject["project"]["version"]
 
 
 def test_explains_a_bad_setting_and_exits_with_code_2() -> None:

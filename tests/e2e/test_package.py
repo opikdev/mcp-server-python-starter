@@ -1,6 +1,7 @@
 """Builds the wheel and runs it with uvx, as a client configured from the MCP Registry would."""
 
 import subprocess
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -36,7 +37,8 @@ def test_prints_its_version(wheel: Path) -> None:
         text=True,
         check=True,
     )
-    assert result.stdout.strip() == "0.1.0"
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    assert result.stdout.strip() == version
 
 
 async def test_serves_tools_over_stdio_from_its_script(wheel: Path) -> None:
