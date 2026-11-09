@@ -6,6 +6,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Fixed
 
+- The server's instructions to the model now name every tool, including the notes tools when they're on. A test keeps them in step.
 - With `MCP_AUTH_MODE=oauth`, an unreachable issuer or unusable metadata now stops the server with a clear message and exit code 2, not a traceback. Metadata that isn't a JSON object falls through to the next discovery URL.
 
 ### Changed

@@ -1,6 +1,6 @@
 # MCP server Python starter
 
-A production-ready Model Context Protocol server in Python, ready to customize with coding agents. It runs over stdio for local clients and Streamable HTTP for remote ones, with OAuth, tests through real MCP clients, and a release pipeline.
+A production-ready Model Context Protocol server in Python, ready to customize with coding agents. It runs over stdio for local clients and Streamable HTTP for remote ones, with OAuth, sample tools that include calls to a backend API, tests through real MCP clients, and a release pipeline.
 
 [![CI](https://github.com/opikdev/mcp-server-python-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/opikdev/mcp-server-python-starter/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

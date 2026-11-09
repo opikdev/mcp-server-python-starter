@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 import pytest
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
-from mcp.types import ResourceLink, TextContent, TextResourceContents, Tool
+from mcp.types import ResourceLink, TextContent, TextResourceContents
 
 from mcp_app.server import create_server
 from mcp_app.upstream.notes_client import NotesClient
@@ -39,15 +39,17 @@ async def test_serves_both_protocol_eras(mode: str, version: str) -> None:
 
 
 @pytest.fixture
-async def every_tool() -> AsyncIterator[list[Tool]]:
+async def client_with_notes() -> AsyncIterator[Client]:
     notes = NotesClient(base_url="http://notes.test", token="unused-token", timeout_seconds=1)
     async with Client(create_server(transport="stdio", notes=notes)) as connected:
-        yield (await connected.list_tools()).tools
+        yield connected
     await notes.aclose()
 
 
-async def test_every_tool_has_a_title_schemas_and_every_annotation(every_tool: list[Tool]) -> None:
-    for tool in every_tool:
+async def test_every_tool_has_a_title_schemas_and_every_annotation(
+    client_with_notes: Client,
+) -> None:
+    for tool in (await client_with_notes.list_tools()).tools:
         assert tool.title, tool.name
         assert tool.description, tool.name
         assert "\n" not in tool.description, tool.name
@@ -70,6 +72,13 @@ async def test_lists_the_sample_tools_as_read_only(client: Client) -> None:
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is True
     assert tools["search_docs"].input_schema["required"] == ["query"]
+
+
+async def test_instructions_name_every_tool(client: Client, client_with_notes: Client) -> None:
+    for connected in (client, client_with_notes):
+        assert connected.instructions is not None
+        for tool in (await connected.list_tools()).tools:
+            assert tool.name in connected.instructions
 
 
 async def test_returns_the_time_in_a_time_zone(client: Client) -> None:
