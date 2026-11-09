@@ -30,7 +30,7 @@ A production-ready MCP server in Python, built on the official MCP Python SDK v2
 - If the check blocks you, fix the cause. Never edit `.agents/check.sh`, `.githooks/`, or the harness workflow to get past it, and never use `--no-verify`. If the request can't be done without that, stop and ask.
 - After cloning, run `git config core.hooksPath .githooks` once to turn on the hook.
 - Add each tool in its own module in `src/mcp_app/tools/` with a `register_*` function, call it from `src/mcp_app/server.py`, and test it through a real client in `tests/integration/`.
-- Give every tool typed, described parameters, a one-line docstring, `ToolAnnotations`, and a return type of `Annotated[CallToolResult, Model]`. Raise `ToolError` with a message the model can act on for expected failures.
+- Give every tool typed, described parameters, a one-line docstring, `ToolAnnotations`, and a return type of `Annotated[CallToolResult, Model]`, where `Model` extends `CamelModel` from `src/mcp_app/models.py`. Raise `ToolError` with a message the model can act on for expected failures.
 - Call backends through a client in `src/mcp_app/upstream/` with a timeout and a response model. Turn failures into `UpstreamError` messages, and never return credentials or raw upstream bodies to the model.
 - Never print to stdout, because stdio uses it for protocol messages. Log with `logging`, which writes JSON to stderr. Ruff's `T20` rule flags `print`.
 - Keep `server.json` in step with `pyproject.toml`. A test enforces this.

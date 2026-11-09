@@ -30,7 +30,7 @@ async def test_follows_a_cursor() -> None:
     api.add("New")
     notes = client(httpx2.ASGITransport(app=api.app))
     first = await notes.list(limit=1)
-    second = await notes.list(limit=1, cursor=first.meta.nextCursor)
+    second = await notes.list(limit=1, cursor=first.meta.next_cursor)
     assert [note.title for note in second.data] == ["Old"]
 
 

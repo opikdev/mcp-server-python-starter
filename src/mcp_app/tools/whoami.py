@@ -5,14 +5,15 @@ from typing import Annotated, Literal
 from mcp.server import MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field
+
+from mcp_app.models import CamelModel
 
 Transport = Literal["stdio", "http"]
 
 
-class Caller(BaseModel):
+class Caller(CamelModel):
     transport: Transport
-    client_id: str | None = Field(alias="clientId")
+    client_id: str | None
     scopes: list[str]
 
 
@@ -26,11 +27,11 @@ def register_whoami_tool(server: MCPServer, transport: Transport) -> None:
         token = get_access_token()
         caller = Caller(
             transport=transport,
-            clientId=token.client_id if token else None,
+            client_id=token.client_id if token else None,
             scopes=token.scopes if token else [],
         )
         who = f"client {caller.client_id}" if caller.client_id else "an unauthenticated caller"
         return CallToolResult(
             content=[TextContent(type="text", text=f"Connected over {transport} as {who}.")],
-            structured_content=caller.model_dump(by_alias=True),
+            structured_content=caller.model_dump(),
         )

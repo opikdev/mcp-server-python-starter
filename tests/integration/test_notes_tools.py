@@ -67,6 +67,7 @@ async def test_creates_a_note_the_api_then_lists(client: Client) -> None:
     created = await client.call_tool("create_note", {"title": "  Buy milk ", "body": "2 litres"})
     assert created.structured_content is not None
     assert created.structured_content["title"] == "Buy milk"
+    assert created.structured_content["createdAt"] == "2026-11-08T12:00:00.000Z"
     listed = await client.call_tool("list_notes", {})
     assert listed.structured_content is not None
     assert listed.structured_content["notes"][0]["id"] == created.structured_content["id"]

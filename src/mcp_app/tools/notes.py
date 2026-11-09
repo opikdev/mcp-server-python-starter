@@ -5,14 +5,15 @@ from typing import Annotated
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import Field, StringConstraints
 
+from mcp_app.models import CamelModel
 from mcp_app.upstream.notes_client import Note, NotesClient, UpstreamError
 
 
-class NoteList(BaseModel):
+class NoteList(CamelModel):
     notes: list[Note]
-    next_cursor: str | None = Field(alias="nextCursor")
+    next_cursor: str | None
 
 
 def register_notes_tools(server: MCPServer, notes: NotesClient) -> None:
@@ -33,10 +34,10 @@ def register_notes_tools(server: MCPServer, notes: NotesClient) -> None:
             raise ToolError(str(error)) from None
         lines = "\n".join(f"- {note.title} ({note.id})" for note in page.data)
         text = f"{len(page.data)} note(s):\n{lines}" if page.data else "No notes."
-        result = NoteList(notes=page.data, nextCursor=page.meta.nextCursor)
+        result = NoteList(notes=page.data, next_cursor=page.meta.next_cursor)
         return CallToolResult(
             content=[TextContent(type="text", text=text)],
-            structured_content=result.model_dump(by_alias=True),
+            structured_content=result.model_dump(),
         )
 
     @server.tool(

@@ -5,19 +5,21 @@ from typing import Any
 import httpx2
 from pydantic import BaseModel, ValidationError
 
+from mcp_app.models import CamelModel
 
-class Note(BaseModel):
+
+class Note(CamelModel):
     id: str
     title: str
     body: str
-    createdAt: str  # noqa: N815 - the API's field name
+    created_at: str
 
 
-class _PageMeta(BaseModel):
-    nextCursor: str | None  # noqa: N815 - the API's field name
+class _PageMeta(CamelModel):
+    next_cursor: str | None
 
 
-class NotePage(BaseModel):
+class NotePage(CamelModel):
     data: list[Note]
     meta: _PageMeta
 

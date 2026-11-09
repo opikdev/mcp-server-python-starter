@@ -4,21 +4,22 @@ from typing import Annotated
 
 from mcp.server import MCPServer
 from mcp.types import CallToolResult, ContentBlock, ResourceLink, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import Field, StringConstraints
 
+from mcp_app.models import CamelModel
 from mcp_app.resources.docs import DOCS, Doc, doc_uri
 
 SNIPPET_LENGTH = 120
 
 
-class SearchResult(BaseModel):
+class SearchResult(CamelModel):
     slug: str
     title: str
     uri: str
     snippet: str
 
 
-class SearchResults(BaseModel):
+class SearchResults(CamelModel):
     results: list[SearchResult]
 
 

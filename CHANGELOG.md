@@ -10,6 +10,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Changed
 
+- Tool results and notes API responses share one `CamelModel` base, so fields are snake_case in Python and camelCase in JSON, with no per-field aliases.
 - Ruff's `T20` rule now flags `print`, which would corrupt stdio messages.
 
 ## [0.1.0] - 2026-11-08
