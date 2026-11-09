@@ -4,6 +4,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-09
+
 ### Added
 
 - **Breaking:** per-tool scopes. With `MCP_AUTH_MODE=oauth`, `create_note` now needs the `notes:write` scope, and the protected resource metadata lists it while the notes tools are on. Static tokens, no auth, and stdio have every scope, so `whoami` now shows `notes:write` for a static token.
@@ -15,6 +17,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 - Every tool sets all four annotation hints explicitly. One contract test checks the title, one-line description, schemas, and hints of every registered tool, including the notes tools.
 - Tool results and notes API responses share one `CamelModel` base, so fields are snake_case in Python and camelCase in JSON, with no per-field aliases.
 - Ruff's `T20` rule now flags `print`, which would corrupt stdio messages.
+- The agent harness is v0.3.0. Its check also fails when the harness workflow or pre-commit hook is missing or no longer runs the check.
+- `renovate.json` belongs to the project and extends the shared baseline preset. Generated projects extend only `config:recommended`.
 
 ### Fixed
 
