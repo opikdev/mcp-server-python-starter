@@ -4,9 +4,10 @@ from collections.abc import AsyncIterator
 import pytest
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
-from mcp.types import ResourceLink, TextContent, TextResourceContents
+from mcp.types import ResourceLink, TextContent, TextResourceContents, Tool
 
 from mcp_app.server import create_server
+from mcp_app.upstream.notes_client import NotesClient
 from tests.helpers import FIXED_NOW
 
 pytestmark = pytest.mark.anyio
@@ -37,14 +38,35 @@ async def test_serves_both_protocol_eras(mode: str, version: str) -> None:
         assert (await client.call_tool("get_time", {})).is_error is False
 
 
-async def test_lists_tools_with_schemas_and_annotations(client: Client) -> None:
+@pytest.fixture
+async def every_tool() -> AsyncIterator[list[Tool]]:
+    notes = NotesClient(base_url="http://notes.test", token="unused-token", timeout_seconds=1)
+    async with Client(create_server(transport="stdio", notes=notes)) as connected:
+        yield (await connected.list_tools()).tools
+    await notes.aclose()
+
+
+async def test_every_tool_has_a_title_schemas_and_every_annotation(every_tool: list[Tool]) -> None:
+    for tool in every_tool:
+        assert tool.title, tool.name
+        assert tool.description, tool.name
+        assert "\n" not in tool.description, tool.name
+        assert tool.input_schema["type"] == "object", tool.name
+        assert tool.output_schema is not None, tool.name
+        assert tool.annotations is not None, tool.name
+        hints = tool.annotations
+        assert None not in (
+            hints.read_only_hint,
+            hints.destructive_hint,
+            hints.idempotent_hint,
+            hints.open_world_hint,
+        ), tool.name
+
+
+async def test_lists_the_sample_tools_as_read_only(client: Client) -> None:
     tools = {tool.name: tool for tool in (await client.list_tools()).tools}
     assert sorted(tools) == ["get_time", "search_docs", "whoami"]
     for tool in tools.values():
-        assert tool.title
-        assert tool.description
-        assert "\n" not in tool.description
-        assert tool.output_schema is not None
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is True
     assert tools["search_docs"].input_schema["required"] == ["query"]

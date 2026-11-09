@@ -20,7 +20,12 @@ class Caller(CamelModel):
 def register_whoami_tool(server: MCPServer, transport: Transport) -> None:
     @server.tool(
         title="Who am I",
-        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
     )
     def whoami() -> Annotated[CallToolResult, Caller]:
         """Returns how the caller is connected and, over HTTP, the client and its scopes."""

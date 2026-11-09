@@ -22,7 +22,12 @@ class Time(CamelModel):
 def register_time_tool(server: MCPServer, now: Callable[[], datetime]) -> None:
     @server.tool(
         title="Get the current time",
-        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
     )
     def get_time(
         timezone: Annotated[

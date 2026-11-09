@@ -19,7 +19,12 @@ class NoteList(CamelModel):
 def register_notes_tools(server: MCPServer, notes: NotesClient) -> None:
     @server.tool(
         title="List notes",
-        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=True,
+        ),
     )
     async def list_notes(
         limit: Annotated[int, Field(ge=1, le=50, description="Notes per page.")] = 10,

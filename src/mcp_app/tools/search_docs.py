@@ -31,7 +31,12 @@ def _score(doc: Doc, terms: list[str]) -> int:
 def register_search_docs_tool(server: MCPServer) -> None:
     @server.tool(
         title="Search the docs",
-        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
     )
     def search_docs(
         query: Annotated[
