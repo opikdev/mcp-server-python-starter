@@ -50,7 +50,7 @@ The server is now at `http://localhost:3000/mcp`, with the dev token `dev-token-
 | Test the built wheel, the Docker image, and a real backend | `make e2e` |
 | Fix formatting and lint you can fix automatically | `make format` |
 
-`make e2e` needs Docker. Over HTTP, the server needs an auth mode. See [Configure HTTP auth](docs/auth.md).
+To work in a dev container, open the folder in one: `.devcontainer/` has Python, uv, and jq, so `make verify` runs inside it. `make e2e` needs Docker on the host. Over HTTP, the server needs an auth mode. See [Configure HTTP auth](docs/auth.md).
 
 To add a tool, create a module in `src/mcp_app/tools/` with a `register_*` function, call it from `src/mcp_app/server.py`, and test it in `tests/integration/test_tools.py`. Before you release, read [Publish a release](docs/publishing.md).
 

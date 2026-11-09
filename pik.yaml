@@ -35,6 +35,7 @@ replace:
   - from: mcp-server-python-starter
     to: "{{name}}"
     files:
+      - .devcontainer/devcontainer.json
       - Dockerfile
       - Makefile
       - compose.yaml

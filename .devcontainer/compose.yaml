@@ -1,0 +1,15 @@
+services:
+  dev:
+    image: ghcr.io/astral-sh/uv:0.13.7-python3.15-trixie
+    command: sleep infinity
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace
+      # Keeps the container's Linux virtual environment apart from the host's.
+      - dev-venv:/workspace/.venv
+    environment:
+      UV_LINK_MODE: copy
+      UV_PYTHON_DOWNLOADS: never
+
+volumes:
+  dev-venv:

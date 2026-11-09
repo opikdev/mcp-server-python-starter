@@ -1,0 +1,8 @@
+{
+  "name": "mcp-server-python-starter",
+  "dockerComposeFile": "compose.yaml",
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+  "forwardPorts": [3000],
+  "postCreateCommand": "apt-get update && apt-get install --yes --no-install-recommends jq && uv sync --locked && (test -f .env || cp .env.example .env)"
+}
