@@ -7,7 +7,7 @@ from mcp_app.auth.jwt import JwtVerifier
 from mcp_app.auth.static import StaticTokenVerifier
 from mcp_app.config import OAuthConfig, TokenConfig, load_http_config
 from mcp_app.http import create_http_app
-from tests.helpers import TOKEN, SigningKey, claims, free_port, http_client, serve
+from tests.helpers import FIXED_NOW, TOKEN, SigningKey, claims, free_port, http_client, serve
 
 pytestmark = pytest.mark.anyio
 
@@ -22,7 +22,8 @@ def token_server() -> Iterator[str]:
     )
     assert isinstance(config.auth, TokenConfig)
     verifier = StaticTokenVerifier(config.auth.tokens, config.auth.scopes)
-    with serve(create_http_app(config, verifier=verifier), port) as url:
+    app = create_http_app(config, verifier=verifier, now=lambda: FIXED_NOW)
+    with serve(app, port) as url:
         yield url
 
 
@@ -70,6 +71,13 @@ async def test_accepts_the_configured_token_in_both_protocol_eras(
         "clientId": "token-1",
         "scopes": ["mcp"],
     }
+
+
+async def test_uses_the_given_clock(token_server: str) -> None:
+    async with http_client(f"{token_server}/mcp", TOKEN) as client:
+        result = await client.call_tool("get_time", {})
+    assert result.structured_content is not None
+    assert result.structured_content["iso"] == "2026-11-08T12:30:00Z"
 
 
 async def test_serves_health_without_a_token(token_server: str) -> None:

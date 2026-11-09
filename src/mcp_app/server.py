@@ -28,7 +28,7 @@ def create_server(
     *,
     transport: Transport,
     notes: NotesClient | None = None,
-    now: Callable[[], datetime] = _utc_now,
+    now: Callable[[], datetime] | None = None,
     token_verifier: TokenVerifier | None = None,
     auth: AuthSettings | None = None,
 ) -> MCPServer:
@@ -40,7 +40,7 @@ def create_server(
         token_verifier=token_verifier,
         auth=auth,
     )
-    register_time_tool(server, now)
+    register_time_tool(server, now or _utc_now)
     register_search_docs_tool(server)
     register_whoami_tool(server, transport)
     if notes is not None:

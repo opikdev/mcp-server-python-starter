@@ -3,7 +3,6 @@
 import contextlib
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
-from typing import Any
 from urllib.parse import urlsplit
 
 from mcp.server.auth.provider import TokenVerifier
@@ -62,14 +61,14 @@ def create_http_app(
     *,
     verifier: TokenVerifier | None,
     notes: NotesClient | None = None,
-    **server_options: Callable[[], datetime] | Any,
+    now: Callable[[], datetime] | None = None,
 ) -> Starlette:
     server = create_server(
         transport="http",
         notes=notes,
         token_verifier=verifier,
         auth=_auth_settings(config) if verifier else None,
-        **server_options,
+        now=now,
     )
     mcp_app = server.streamable_http_app(
         streamable_http_path=config.path,
