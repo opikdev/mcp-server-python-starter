@@ -1,5 +1,6 @@
 """Runs the real entry point in a subprocess, as clients and containers do."""
 
+import contextlib
 import json
 import os
 import signal
@@ -12,8 +13,12 @@ import httpx2
 import pytest
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
-from tests.helpers import TOKEN, free_port, http_client
+from tests.helpers import TOKEN, SigningKey, claims, free_port, http_client, serve
 
 pytestmark = pytest.mark.anyio
 
@@ -51,18 +56,15 @@ async def test_keeps_stdout_for_protocol_messages_and_logs_json_to_stderr() -> N
     assert result.is_error is False
 
 
-@pytest.fixture
-def http_process() -> Iterator[tuple[subprocess.Popen[str], str]]:
+@contextlib.contextmanager
+def serve_cli(env: dict[str, str]) -> Iterator[tuple[subprocess.Popen[str], str]]:
     port = free_port()
-    env = {
-        **os.environ,
-        "PORT": str(port),
-        "MCP_AUTH_MODE": "token",
-        "MCP_AUTH_TOKENS": TOKEN,
-        "LOG_LEVEL": "info",
-    }
     process = subprocess.Popen(
-        [*COMMAND, "--http"], env=env, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+        [*COMMAND, "--http"],
+        env={**os.environ, "PORT": str(port), "LOG_LEVEL": "info", **env},
+        stderr=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
     )
     url = f"http://localhost:{port}"
     deadline = time.monotonic() + 20
@@ -76,7 +78,15 @@ def http_process() -> Iterator[tuple[subprocess.Popen[str], str]]:
         yield process, url
     finally:
         if process.poll() is None:
-            process.kill()
+            # SIGTERM, not SIGKILL, so the process shuts down and saves its coverage.
+            process.terminate()
+            process.communicate(timeout=20)
+
+
+@pytest.fixture
+def http_process() -> Iterator[tuple[subprocess.Popen[str], str]]:
+    with serve_cli({"MCP_AUTH_MODE": "token", "MCP_AUTH_TOKENS": TOKEN}) as served:
+        yield served
 
 
 async def test_serves_http_and_shuts_down_cleanly_on_sigterm(
@@ -97,3 +107,42 @@ async def test_serves_http_and_shuts_down_cleanly_on_sigterm(
     assert any(entry["msg"] == "Serving MCP over HTTP" for entry in entries)
     assert all({"time", "level", "logger", "msg"} <= entry.keys() for entry in entries)
     assert TOKEN not in stderr + stdout
+
+
+def authorization_server(key: SigningKey, port: int) -> Starlette:
+    issuer = f"http://localhost:{port}"
+
+    async def metadata(_: Request) -> JSONResponse:
+        return JSONResponse({"issuer": issuer, "jwks_uri": f"{issuer}/jwks"})
+
+    async def jwks(_: Request) -> JSONResponse:
+        return JSONResponse({"keys": [key.jwk]})
+
+    return Starlette(
+        routes=[
+            Route("/.well-known/oauth-authorization-server", metadata),
+            Route("/jwks", jwks),
+        ]
+    )
+
+
+async def test_finds_the_issuer_keys_and_accepts_its_tokens() -> None:
+    key = SigningKey()
+    issuer_port = free_port()
+    with (
+        serve(authorization_server(key, issuer_port), issuer_port) as issuer,
+        serve_cli({"MCP_AUTH_MODE": "oauth", "MCP_AUTH_ISSUER": issuer}) as (_, url),
+    ):
+        token = key.sign(claims(iss=issuer, aud=f"{url}/mcp"))
+        async with http_client(f"{url}/mcp", token) as client:
+            result = await client.call_tool("whoami", {})
+    assert result.structured_content is not None
+    assert result.structured_content["clientId"] == "client-1"
+
+
+def test_explains_an_unreachable_issuer_without_a_traceback() -> None:
+    issuer = f"http://127.0.0.1:{free_port()}"
+    result = run("--http", env={"MCP_AUTH_MODE": "oauth", "MCP_AUTH_ISSUER": issuer})
+    assert result.returncode == 2
+    assert f"Error: Couldn't reach the authorization server at {issuer}/" in result.stderr
+    assert "Traceback" not in result.stderr

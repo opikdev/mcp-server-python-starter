@@ -5,19 +5,21 @@ from typing import Any
 import httpx2
 from pydantic import BaseModel, ValidationError
 
+from mcp_app.models import CamelModel
 
-class Note(BaseModel):
+
+class Note(CamelModel):
     id: str
     title: str
     body: str
-    createdAt: str  # noqa: N815 - the API's field name
+    created_at: str
 
 
-class _PageMeta(BaseModel):
-    nextCursor: str | None  # noqa: N815 - the API's field name
+class _PageMeta(CamelModel):
+    next_cursor: str | None
 
 
-class NotePage(BaseModel):
+class NotePage(CamelModel):
     data: list[Note]
     meta: _PageMeta
 
@@ -31,6 +33,10 @@ class UpstreamError(Exception):
         super().__init__(message)
         self.status = status
         self.retry_after_seconds = retry_after_seconds
+
+
+class NoResponseError(UpstreamError):
+    """The API didn't answer, so a write may or may not have happened."""
 
 
 def _detail(response: httpx2.Response) -> str | None:
@@ -87,11 +93,11 @@ class NotesClient:
         try:
             response = await self._http.request(method, path, **kwargs)
         except httpx2.TimeoutException:
-            raise UpstreamError(
+            raise NoResponseError(
                 f"The notes API didn't answer within {self._timeout:g} seconds. Try again later."
             ) from None
         except httpx2.TransportError:
-            raise UpstreamError("Couldn't reach the notes API. Try again later.") from None
+            raise NoResponseError("Couldn't reach the notes API. Try again later.") from None
         if not response.is_success:
             raise _error(response)
         try:

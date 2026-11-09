@@ -9,6 +9,8 @@ import httpx2
 import jwt
 from mcp.server.auth.provider import AccessToken
 
+from mcp_app.config import ConfigError
+
 ALGORITHMS = ["RS256", "PS256", "ES256", "EdDSA"]
 DISCOVERY_TIMEOUT_SECONDS = 5.0
 
@@ -86,22 +88,41 @@ def _metadata_urls(issuer: str) -> list[str]:
     ]
 
 
+def _metadata(response: httpx2.Response) -> dict[str, Any] | None:
+    if response.status_code != 200:
+        return None
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    return body if isinstance(body, dict) else None
+
+
 async def discover_jwks_url(issuer: str, client: httpx2.AsyncClient) -> str:
-    """Reads `jwks_uri` from the issuer's OAuth or OpenID metadata, per RFC 8414."""
+    """Reads `jwks_uri` from the issuer's OAuth or OpenID metadata, per RFC 8414.
+
+    Raises `ConfigError` if the issuer is unreachable, has no usable metadata, or names another.
+    """
     for address in _metadata_urls(issuer):
-        response = await client.get(address, timeout=DISCOVERY_TIMEOUT_SECONDS)
-        if response.status_code != 200:
+        try:
+            response = await client.get(address, timeout=DISCOVERY_TIMEOUT_SECONDS)
+        except httpx2.HTTPError as error:
+            raise ConfigError(
+                f"Couldn't reach the authorization server at {address} "
+                f"({type(error).__name__}). Check MCP_AUTH_ISSUER."
+            ) from None
+        metadata = _metadata(response)
+        if metadata is None:
             continue
-        metadata = response.json()
         if metadata.get("issuer") != issuer:
-            raise RuntimeError(
+            raise ConfigError(
                 f"Authorization server metadata at {address} names issuer "
-                f"{metadata.get('issuer')}, not {issuer}"
+                f"{metadata.get('issuer')}, not {issuer}. Check MCP_AUTH_ISSUER."
             )
         jwks_uri = metadata.get("jwks_uri")
         if isinstance(jwks_uri, str) and jwks_uri:
             return jwks_uri
-    raise RuntimeError(f"Couldn't find a jwks_uri for {issuer}. Set MCP_AUTH_JWKS_URL.")
+    raise ConfigError(f"Couldn't find a jwks_uri for {issuer}. Set MCP_AUTH_JWKS_URL.")
 
 
 def remote_keys(jwks_url: str) -> jwt.PyJWKClient:

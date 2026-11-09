@@ -26,7 +26,7 @@ UPSTREAM_API_URL=http://localhost:3200 UPSTREAM_API_TOKEN=$TOKEN make inspect
 `src/mcp_app/upstream/notes_client.py` and `src/mcp_app/tools/notes.py` split the work:
 
 1. **The client** calls the API with a timeout through `httpx2`, validates every response with a Pydantic model, and turns failures into `UpstreamError` messages written for the model, such as "Retry in 30 seconds".
-2. **The tool** validates input from its type hints, calls the client, returns structured content, and raises `ToolError` with the `UpstreamError` message, which the model sees as `isError: true`. Any other error is a bug, so the model only sees a generic error and the details stay in your logs.
+2. **The tool** validates input from its type hints, calls the client, returns structured content, and raises `ToolError` with the `UpstreamError` message, which the model sees as `isError: true`. If a write such as `create_note` gets no answer, the model is told the note may or may not exist and to check with `list_notes`, because a blind retry could create a duplicate. Any other error is a bug, so the model only sees a generic error and the details stay in your logs.
 3. **The annotations** tell clients what a call does: `open_world_hint=True` for an external system, and `read_only_hint=False` for writes.
 
 Keep the API token on the server. The model only sees results and error messages, never credentials or raw upstream bodies.

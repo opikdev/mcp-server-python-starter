@@ -67,6 +67,7 @@ async def test_creates_a_note_the_api_then_lists(client: Client) -> None:
     created = await client.call_tool("create_note", {"title": "  Buy milk ", "body": "2 litres"})
     assert created.structured_content is not None
     assert created.structured_content["title"] == "Buy milk"
+    assert created.structured_content["createdAt"] == "2026-11-08T12:00:00.000Z"
     listed = await client.call_tool("list_notes", {})
     assert listed.structured_content is not None
     assert listed.structured_content["notes"][0]["id"] == created.structured_content["id"]
@@ -110,3 +111,27 @@ async def test_turns_api_failures_into_messages_without_leaking_the_token(
     assert result.is_error is True
     assert message in text(result)
     assert UPSTREAM_TOKEN not in text(result)
+
+
+@pytest.mark.parametrize("error", [httpx2.ReadTimeout("slow"), httpx2.RemoteProtocolError("cut")])
+async def test_says_a_write_without_an_answer_may_have_happened(error: Exception) -> None:
+    def handle(_: httpx2.Request) -> httpx2.Response:
+        raise error
+
+    notes = NotesClient(
+        base_url="http://notes.test",
+        token=UPSTREAM_TOKEN,
+        timeout_seconds=5,
+        transport=httpx2.MockTransport(handle),
+    )
+    async with Client(create_server(transport="stdio", notes=notes)) as connected:
+        created = await connected.call_tool("create_note", {"title": "Buy milk"})
+        listed = await connected.call_tool("list_notes", {})
+    await notes.aclose()
+    assert created.is_error is True
+    assert text(created).endswith(
+        "The notes API didn't answer in time, so the note may or may not exist. "
+        "Call list_notes to check before retrying."
+    )
+    assert listed.is_error is True
+    assert "Try again later" in text(listed)

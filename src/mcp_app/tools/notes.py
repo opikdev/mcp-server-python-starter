@@ -5,20 +5,32 @@ from typing import Annotated
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import Field, StringConstraints
 
-from mcp_app.upstream.notes_client import Note, NotesClient, UpstreamError
+from mcp_app.auth.scopes import NOTES_WRITE, require_scope
+from mcp_app.models import CamelModel
+from mcp_app.upstream.notes_client import NoResponseError, Note, NotesClient, UpstreamError
+
+UNKNOWN_OUTCOME = (
+    "The notes API didn't answer in time, so the note may or may not exist. "
+    "Call list_notes to check before retrying."
+)
 
 
-class NoteList(BaseModel):
+class NoteList(CamelModel):
     notes: list[Note]
-    next_cursor: str | None = Field(alias="nextCursor")
+    next_cursor: str | None
 
 
 def register_notes_tools(server: MCPServer, notes: NotesClient) -> None:
     @server.tool(
         title="List notes",
-        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=True),
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=True,
+        ),
     )
     async def list_notes(
         limit: Annotated[int, Field(ge=1, le=50, description="Notes per page.")] = 10,
@@ -33,10 +45,10 @@ def register_notes_tools(server: MCPServer, notes: NotesClient) -> None:
             raise ToolError(str(error)) from None
         lines = "\n".join(f"- {note.title} ({note.id})" for note in page.data)
         text = f"{len(page.data)} note(s):\n{lines}" if page.data else "No notes."
-        result = NoteList(notes=page.data, nextCursor=page.meta.nextCursor)
+        result = NoteList(notes=page.data, next_cursor=page.meta.next_cursor)
         return CallToolResult(
             content=[TextContent(type="text", text=text)],
-            structured_content=result.model_dump(by_alias=True),
+            structured_content=result.model_dump(),
         )
 
     @server.tool(
@@ -57,8 +69,11 @@ def register_notes_tools(server: MCPServer, notes: NotesClient) -> None:
         body: Annotated[str, Field(max_length=10_000, description="Note text.")] = "",
     ) -> Annotated[CallToolResult, Note]:
         """Creates one note in the notes API per call, so call it once for each note."""
+        require_scope(NOTES_WRITE, "create notes")
         try:
             note = await notes.create(title=title, body=body)
+        except NoResponseError:
+            raise ToolError(UNKNOWN_OUTCOME) from None
         except UpstreamError as error:
             raise ToolError(str(error)) from None
         return CallToolResult(

@@ -6,6 +6,7 @@ import pytest
 
 from mcp_app.auth.jwt import JwtVerifier, discover_jwks_url
 from mcp_app.auth.static import StaticTokenVerifier
+from mcp_app.config import ConfigError
 from tests.helpers import SigningKey, claims
 
 pytestmark = pytest.mark.anyio
@@ -29,7 +30,8 @@ async def test_static_verifier_accepts_each_configured_token() -> None:
     first, second = [await static.verify_token(token) for token in tokens]
     assert first is not None
     assert second is not None
-    assert (first.client_id, second.client_id, second.scopes) == ("token-1", "token-2", ["mcp"])
+    assert (first.client_id, second.client_id) == ("token-1", "token-2")
+    assert second.scopes == ["mcp", "notes:write"]
     assert await static.verify_token("first-token-012345") is None
 
 
@@ -94,12 +96,12 @@ async def test_jwt_verifier_rejects_a_token_signed_by_another_key(key: SigningKe
     assert await verifier(key).verify_token(SigningKey().sign(claims())) is None
 
 
-def metadata_server(responses: dict[str, dict[str, str]]) -> httpx2.AsyncClient:
+def metadata_server(responses: dict[str, object]) -> httpx2.AsyncClient:
     def handle(request: httpx2.Request) -> httpx2.Response:
         body = responses.get(str(request.url))
         if body is None:
             return httpx2.Response(404)
-        return httpx2.Response(200, content=json.dumps(body))
+        return httpx2.Response(200, content=body if isinstance(body, str) else json.dumps(body))
 
     return httpx2.AsyncClient(transport=httpx2.MockTransport(handle))
 
@@ -138,10 +140,35 @@ async def test_discovery_rejects_metadata_for_another_issuer() -> None:
             }
         }
     )
-    with pytest.raises(RuntimeError, match=r"names issuer https://evil\.example"):
+    with pytest.raises(ConfigError, match=r"names issuer https://evil\.example"):
         await discover_jwks_url(ISSUER, client)
 
 
 async def test_discovery_explains_how_to_fix_missing_metadata() -> None:
-    with pytest.raises(RuntimeError, match="Set MCP_AUTH_JWKS_URL"):
+    with pytest.raises(ConfigError, match="Set MCP_AUTH_JWKS_URL"):
         await discover_jwks_url(ISSUER, metadata_server({}))
+
+
+@pytest.mark.parametrize("body", ["<html>Not found</html>", ["not", "an", "object"]])
+async def test_discovery_skips_metadata_that_is_not_a_json_object(body: object) -> None:
+    client = metadata_server(
+        {
+            f"{ISSUER}/.well-known/oauth-authorization-server": body,
+            f"{ISSUER}/.well-known/openid-configuration": {
+                "issuer": ISSUER,
+                "jwks_uri": f"{ISSUER}/certs",
+            },
+        }
+    )
+    assert await discover_jwks_url(ISSUER, client) == f"{ISSUER}/certs"
+
+
+async def test_discovery_explains_an_unreachable_issuer() -> None:
+    def handle(_: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("refused")
+
+    client = httpx2.AsyncClient(transport=httpx2.MockTransport(handle))
+    with pytest.raises(
+        ConfigError, match=r"Couldn't reach the authorization server .*ConnectError"
+    ):
+        await discover_jwks_url(ISSUER, client)

@@ -22,6 +22,7 @@ Paths are under `src/mcp_app/`.
 | `http.py` | The Starlette app: health, protected resource metadata, auth, and the MCP endpoint |
 | `auth/` | Static token and JWT verifiers |
 | `upstream/` | Clients for backend APIs, with timeouts and response validation |
+| `models.py` | `CamelModel`, the base for tool results and API responses: snake_case in Python, camelCase in JSON |
 | `config.py`, `log.py` | Settings from the environment, and JSON logs on stderr |
 
 ## Key behaviors

@@ -1,3 +1,4 @@
+import logging
 import sys
 from collections.abc import AsyncIterator
 
@@ -7,6 +8,7 @@ from mcp.client.stdio import StdioServerParameters
 from mcp.types import ResourceLink, TextContent, TextResourceContents
 
 from mcp_app.server import create_server
+from mcp_app.upstream.notes_client import NotesClient
 from tests.helpers import FIXED_NOW
 
 pytestmark = pytest.mark.anyio
@@ -37,17 +39,47 @@ async def test_serves_both_protocol_eras(mode: str, version: str) -> None:
         assert (await client.call_tool("get_time", {})).is_error is False
 
 
-async def test_lists_tools_with_schemas_and_annotations(client: Client) -> None:
+@pytest.fixture
+async def client_with_notes() -> AsyncIterator[Client]:
+    notes = NotesClient(base_url="http://notes.test", token="unused-token", timeout_seconds=1)
+    async with Client(create_server(transport="stdio", notes=notes)) as connected:
+        yield connected
+    await notes.aclose()
+
+
+async def test_every_tool_has_a_title_schemas_and_every_annotation(
+    client_with_notes: Client,
+) -> None:
+    for tool in (await client_with_notes.list_tools()).tools:
+        assert tool.title, tool.name
+        assert tool.description, tool.name
+        assert "\n" not in tool.description, tool.name
+        assert tool.input_schema["type"] == "object", tool.name
+        assert tool.output_schema is not None, tool.name
+        assert tool.annotations is not None, tool.name
+        hints = tool.annotations
+        assert None not in (
+            hints.read_only_hint,
+            hints.destructive_hint,
+            hints.idempotent_hint,
+            hints.open_world_hint,
+        ), tool.name
+
+
+async def test_lists_the_sample_tools_as_read_only(client: Client) -> None:
     tools = {tool.name: tool for tool in (await client.list_tools()).tools}
     assert sorted(tools) == ["get_time", "search_docs", "whoami"]
     for tool in tools.values():
-        assert tool.title
-        assert tool.description
-        assert "\n" not in tool.description
-        assert tool.output_schema is not None
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is True
     assert tools["search_docs"].input_schema["required"] == ["query"]
+
+
+async def test_instructions_name_every_tool(client: Client, client_with_notes: Client) -> None:
+    for connected in (client, client_with_notes):
+        assert connected.instructions is not None
+        for tool in (await connected.list_tools()).tools:
+            assert tool.name in connected.instructions
 
 
 async def test_returns_the_time_in_a_time_zone(client: Client) -> None:
@@ -113,3 +145,21 @@ async def test_lists_and_reads_docs_resources(client: Client) -> None:
 async def test_fails_clearly_for_an_unknown_doc(client: Client) -> None:
     with pytest.raises(Exception, match="No doc at docs://missing"):
         await client.read_resource("docs://missing")
+
+
+async def test_hides_an_unexpected_error_from_the_model_and_logs_it(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    server = create_server(transport="stdio")
+
+    @server.tool()
+    def crash() -> str:
+        """Fails the way a bug would."""
+        raise RuntimeError("internal detail: db password is hunter2")
+
+    async with Client(server) as connected:
+        with caplog.at_level(logging.ERROR):
+            result = await connected.call_tool("crash", {})
+    assert result.is_error is True
+    assert text(result.content[0]) == "Error executing tool crash"
+    assert any(record.exc_info for record in caplog.records)

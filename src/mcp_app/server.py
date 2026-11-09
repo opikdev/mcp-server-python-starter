@@ -16,8 +16,10 @@ from mcp_app.tools.whoami import Transport, register_whoami_tool
 from mcp_app.upstream.notes_client import NotesClient
 
 INSTRUCTIONS = (
-    "Tools for the current time and this server's docs. Read docs:// resources for details."
+    "Use get_time for the current time, search_docs to find this server's guides, and whoami "
+    "to see how you're connected. Read docs:// resources for details."
 )
+NOTES_INSTRUCTIONS = " Use list_notes to read notes from the notes API, and create_note to add one."
 
 
 def _utc_now() -> datetime:
@@ -28,7 +30,7 @@ def create_server(
     *,
     transport: Transport,
     notes: NotesClient | None = None,
-    now: Callable[[], datetime] = _utc_now,
+    now: Callable[[], datetime] | None = None,
     token_verifier: TokenVerifier | None = None,
     auth: AuthSettings | None = None,
 ) -> MCPServer:
@@ -36,11 +38,11 @@ def create_server(
         "mcp-server-python-starter",
         title="MCP server Python starter",
         version=__version__,
-        instructions=INSTRUCTIONS,
+        instructions=INSTRUCTIONS + (NOTES_INSTRUCTIONS if notes is not None else ""),
         token_verifier=token_verifier,
         auth=auth,
     )
-    register_time_tool(server, now)
+    register_time_tool(server, now or _utc_now)
     register_search_docs_tool(server)
     register_whoami_tool(server, transport)
     if notes is not None:

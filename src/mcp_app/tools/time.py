@@ -8,10 +8,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from mcp_app.models import CamelModel
 
 
-class Time(BaseModel):
+class Time(CamelModel):
     iso: str = Field(description="The time in UTC, in ISO 8601.")
     timezone: str
     local: str = Field(description="The local date and time, for people to read.")
@@ -20,7 +22,12 @@ class Time(BaseModel):
 def register_time_tool(server: MCPServer, now: Callable[[], datetime]) -> None:
     @server.tool(
         title="Get the current time",
-        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
     )
     def get_time(
         timezone: Annotated[
