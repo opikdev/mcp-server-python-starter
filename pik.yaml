@@ -14,6 +14,9 @@ prompts:
     pattern: ^[A-Za-z0-9-]{1,39}$
     optional: true
 replace:
+  - from: '"extends": ["config:recommended", "github>opikdev/starters//renovate/baseline"]'
+    to: '"extends": ["config:recommended"]'
+    files: [renovate.json]
   - from: "opikdev/mcp-server-python-starter\ncd mcp-server-python-starter\n"
     to: "{{owner}}/{{name}}\ncd {{name}}\n"
     files: [README.md]
