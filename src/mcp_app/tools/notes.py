@@ -8,7 +8,12 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field, StringConstraints
 
 from mcp_app.models import CamelModel
-from mcp_app.upstream.notes_client import Note, NotesClient, UpstreamError
+from mcp_app.upstream.notes_client import NoResponseError, Note, NotesClient, UpstreamError
+
+UNKNOWN_OUTCOME = (
+    "The notes API didn't answer in time, so the note may or may not exist. "
+    "Call list_notes to check before retrying."
+)
 
 
 class NoteList(CamelModel):
@@ -65,6 +70,8 @@ def register_notes_tools(server: MCPServer, notes: NotesClient) -> None:
         """Creates one note in the notes API per call, so call it once for each note."""
         try:
             note = await notes.create(title=title, body=body)
+        except NoResponseError:
+            raise ToolError(UNKNOWN_OUTCOME) from None
         except UpstreamError as error:
             raise ToolError(str(error)) from None
         return CallToolResult(

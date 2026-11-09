@@ -1,7 +1,7 @@
 import httpx2
 import pytest
 
-from mcp_app.upstream.notes_client import NotesClient, UpstreamError
+from mcp_app.upstream.notes_client import NoResponseError, NotesClient, UpstreamError
 from tests.fake_notes_api import FakeNotesApi
 
 pytestmark = pytest.mark.anyio
@@ -62,7 +62,7 @@ async def test_reports_a_slow_or_unreachable_api(error: Exception, message: str)
     def handle(_: httpx2.Request) -> httpx2.Response:
         raise error
 
-    with pytest.raises(UpstreamError, match=message):
+    with pytest.raises(NoResponseError, match=message):
         await client(httpx2.MockTransport(handle)).list(limit=1)
 
 

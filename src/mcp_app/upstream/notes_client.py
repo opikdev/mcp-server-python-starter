@@ -35,6 +35,10 @@ class UpstreamError(Exception):
         self.retry_after_seconds = retry_after_seconds
 
 
+class NoResponseError(UpstreamError):
+    """The API didn't answer, so a write may or may not have happened."""
+
+
 def _detail(response: httpx2.Response) -> str | None:
     try:
         detail = response.json().get("detail")
@@ -89,11 +93,11 @@ class NotesClient:
         try:
             response = await self._http.request(method, path, **kwargs)
         except httpx2.TimeoutException:
-            raise UpstreamError(
+            raise NoResponseError(
                 f"The notes API didn't answer within {self._timeout:g} seconds. Try again later."
             ) from None
         except httpx2.TransportError:
-            raise UpstreamError("Couldn't reach the notes API. Try again later.") from None
+            raise NoResponseError("Couldn't reach the notes API. Try again later.") from None
         if not response.is_success:
             raise _error(response)
         try:
