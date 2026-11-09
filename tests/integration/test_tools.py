@@ -1,3 +1,4 @@
+import logging
 import sys
 from collections.abc import AsyncIterator
 
@@ -144,3 +145,21 @@ async def test_lists_and_reads_docs_resources(client: Client) -> None:
 async def test_fails_clearly_for_an_unknown_doc(client: Client) -> None:
     with pytest.raises(Exception, match="No doc at docs://missing"):
         await client.read_resource("docs://missing")
+
+
+async def test_hides_an_unexpected_error_from_the_model_and_logs_it(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    server = create_server(transport="stdio")
+
+    @server.tool()
+    def crash() -> str:
+        """Fails the way a bug would."""
+        raise RuntimeError("internal detail: db password is hunter2")
+
+    async with Client(server) as connected:
+        with caplog.at_level(logging.ERROR):
+            result = await connected.call_tool("crash", {})
+    assert result.is_error is True
+    assert text(result.content[0]) == "Error executing tool crash"
+    assert any(record.exc_info for record in caplog.records)
