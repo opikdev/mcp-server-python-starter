@@ -6,6 +6,7 @@ from datetime import datetime
 from urllib.parse import urlsplit
 
 from mcp.server.auth.provider import TokenVerifier
+from mcp.server.auth.routes import create_protected_resource_routes
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
@@ -13,6 +14,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
+from mcp_app.auth.scopes import NOTES_WRITE
 from mcp_app.config import HttpConfig, NoAuthConfig, OAuthConfig
 from mcp_app.server import create_server
 from mcp_app.upstream.notes_client import NotesClient
@@ -52,6 +54,19 @@ def _transport_security(config: HttpConfig) -> TransportSecuritySettings:
     )
 
 
+def _metadata_routes(auth: AuthSettings | None, notes: NotesClient | None) -> list[Route]:
+    if auth is None or auth.resource_server_url is None:
+        return []
+    # This route shadows the SDK's, which lists only the scopes every token needs. List a tool
+    # scope only while its tool is on, because some authorization servers reject unknown scopes.
+    tool_scopes = [NOTES_WRITE] if notes is not None else []
+    return create_protected_resource_routes(
+        resource_url=auth.resource_server_url,
+        authorization_servers=[auth.issuer_url],
+        scopes_supported=list(dict.fromkeys([*(auth.required_scopes or []), *tool_scopes])),
+    )
+
+
 async def _health(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
@@ -63,12 +78,9 @@ def create_http_app(
     notes: NotesClient | None = None,
     now: Callable[[], datetime] | None = None,
 ) -> Starlette:
+    auth = _auth_settings(config) if verifier else None
     server = create_server(
-        transport="http",
-        notes=notes,
-        token_verifier=verifier,
-        auth=_auth_settings(config) if verifier else None,
-        now=now,
+        transport="http", notes=notes, token_verifier=verifier, auth=auth, now=now
     )
     mcp_app = server.streamable_http_app(
         streamable_http_path=config.path,
@@ -84,6 +96,10 @@ def create_http_app(
             yield
 
     return Starlette(
-        routes=[Route("/healthz", _health, methods=["GET"]), Mount("/", app=mcp_app)],
+        routes=[
+            Route("/healthz", _health, methods=["GET"]),
+            *_metadata_routes(auth, notes),
+            Mount("/", app=mcp_app),
+        ],
         lifespan=lifespan,
     )

@@ -1,17 +1,22 @@
 from collections.abc import Iterator
 
+import anyio
 import httpx2
 import pytest
+from mcp.types import TextContent
 
 from mcp_app.auth.jwt import JwtVerifier
 from mcp_app.auth.static import StaticTokenVerifier
 from mcp_app.config import OAuthConfig, TokenConfig, load_http_config
 from mcp_app.http import create_http_app
+from mcp_app.upstream.notes_client import NotesClient
+from tests.fake_notes_api import FakeNotesApi
 from tests.helpers import FIXED_NOW, TOKEN, SigningKey, claims, free_port, http_client, serve
 
 pytestmark = pytest.mark.anyio
 
 ISSUER = "https://auth.example.com"
+UPSTREAM_TOKEN = "upstream-secret-token-123"
 
 
 @pytest.fixture(scope="module")
@@ -33,15 +38,27 @@ def signing_key() -> SigningKey:
 
 
 @pytest.fixture(scope="module")
-def oauth_server(signing_key: SigningKey) -> Iterator[str]:
+def notes_api() -> FakeNotesApi:
+    return FakeNotesApi(UPSTREAM_TOKEN)
+
+
+@pytest.fixture(scope="module")
+def oauth_server(signing_key: SigningKey, notes_api: FakeNotesApi) -> Iterator[str]:
     port = free_port()
     config = load_http_config(
         {"PORT": str(port), "MCP_AUTH_MODE": "oauth", "MCP_AUTH_ISSUER": ISSUER}
     )
     assert isinstance(config.auth, OAuthConfig)
     verifier = JwtVerifier(issuer=ISSUER, audience=config.public_url, keys=signing_key)
-    with serve(create_http_app(config, verifier=verifier), port) as url:
+    notes = NotesClient(
+        base_url="http://notes.test",
+        token=UPSTREAM_TOKEN,
+        timeout_seconds=5,
+        transport=httpx2.ASGITransport(app=notes_api.app),
+    )
+    with serve(create_http_app(config, verifier=verifier, notes=notes), port) as url:
         yield url
+    anyio.run(notes.aclose)
 
 
 async def test_rejects_a_request_without_a_token_with_a_bearer_challenge(token_server: str) -> None:
@@ -69,7 +86,7 @@ async def test_accepts_the_configured_token_in_both_protocol_eras(
     assert result.structured_content == {
         "transport": "http",
         "clientId": "token-1",
-        "scopes": ["mcp"],
+        "scopes": ["mcp", "notes:write"],
     }
 
 
@@ -119,9 +136,47 @@ async def test_publishes_protected_resource_metadata(oauth_server: str) -> None:
     assert response.json() == {
         "resource": f"{oauth_server}/mcp",
         "authorization_servers": [ISSUER],
-        "scopes_supported": ["mcp"],
+        "scopes_supported": ["mcp", "notes:write"],
         "bearer_methods_supported": ["header"],
     }
+
+
+async def test_lists_only_the_base_scopes_when_the_notes_tools_are_off() -> None:
+    config = load_http_config({"MCP_AUTH_MODE": "oauth", "MCP_AUTH_ISSUER": ISSUER})
+    verifier = JwtVerifier(issuer=ISSUER, audience=config.public_url, keys=SigningKey())
+    app = create_http_app(config, verifier=verifier)
+    async with httpx2.AsyncClient(
+        transport=httpx2.ASGITransport(app=app), base_url="http://localhost:3000"
+    ) as http:
+        response = await http.get("/.well-known/oauth-protected-resource/mcp")
+    assert response.json()["scopes_supported"] == ["mcp"]
+
+
+async def test_refuses_to_create_a_note_without_the_notes_write_scope(
+    oauth_server: str, signing_key: SigningKey, notes_api: FakeNotesApi
+) -> None:
+    token = signing_key.sign(claims(aud=f"{oauth_server}/mcp", scope="mcp"))
+    async with http_client(f"{oauth_server}/mcp", token) as client:
+        result = await client.call_tool("create_note", {"title": "Buy milk"})
+    content = result.content[0]
+    assert result.is_error is True
+    assert isinstance(content, TextContent)
+    assert content.text.endswith(
+        "This token lacks the notes:write scope. Reconnect with that scope to create notes."
+    )
+    assert notes_api.notes == []
+
+
+async def test_creates_a_note_with_the_notes_write_scope(
+    oauth_server: str, signing_key: SigningKey, notes_api: FakeNotesApi
+) -> None:
+    token = signing_key.sign(claims(aud=f"{oauth_server}/mcp", scope="mcp notes:write"))
+    async with http_client(f"{oauth_server}/mcp", token) as client:
+        result = await client.call_tool("create_note", {"title": "Buy milk"})
+        listed = await client.call_tool("list_notes", {})
+    assert result.is_error is False
+    assert listed.structured_content is not None
+    assert [note["title"] for note in listed.structured_content["notes"]] == ["Buy milk"]
 
 
 async def test_points_clients_at_the_metadata_in_the_401_challenge(oauth_server: str) -> None:

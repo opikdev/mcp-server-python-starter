@@ -4,6 +4,10 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Added
+
+- **Breaking:** per-tool scopes. With `MCP_AUTH_MODE=oauth`, `create_note` now needs the `notes:write` scope, and the protected resource metadata lists it while the notes tools are on. Static tokens, no auth, and stdio have every scope, so `whoami` now shows `notes:write` for a static token.
+
 ### Fixed
 
 - When `create_note` gets no answer from the notes API, it no longer tells the model to try again, which could create a duplicate. It says the note may or may not exist and to check with `list_notes` first.

@@ -7,6 +7,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field, StringConstraints
 
+from mcp_app.auth.scopes import NOTES_WRITE, require_scope
 from mcp_app.models import CamelModel
 from mcp_app.upstream.notes_client import NoResponseError, Note, NotesClient, UpstreamError
 
@@ -68,6 +69,7 @@ def register_notes_tools(server: MCPServer, notes: NotesClient) -> None:
         body: Annotated[str, Field(max_length=10_000, description="Note text.")] = "",
     ) -> Annotated[CallToolResult, Note]:
         """Creates one note in the notes API per call, so call it once for each note."""
+        require_scope(NOTES_WRITE, "create notes")
         try:
             note = await notes.create(title=title, body=body)
         except NoResponseError:

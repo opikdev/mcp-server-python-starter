@@ -25,8 +25,20 @@ The server then:
 1. Publishes protected resource metadata at `/.well-known/oauth-protected-resource/mcp`, so clients can find your authorization server.
 2. Answers unauthenticated requests with `401` and a `WWW-Authenticate` header pointing to that metadata.
 3. Accepts only signed JWT access tokens from your issuer, for `MCP_PUBLIC_URL` as the audience, with every scope in `MCP_AUTH_SCOPES`, and an expiry.
+4. Checks the scope each tool that changes data needs. See [Per-tool scopes](#per-tool-scopes).
 
 It finds the signing keys through your issuer's metadata. Set `MCP_AUTH_JWKS_URL` if your issuer doesn't publish it.
+
+## Per-tool scopes
+
+Every token needs the scopes in `MCP_AUTH_SCOPES`. Tools that change data need one more:
+
+| Tool | Scope |
+|---|---|
+| `create_note` | `notes:write` |
+
+- **`oauth`:** the token's `scope` or `scp` claim must include it. Otherwise the tool returns an error the model can read, and does nothing. While the notes tools are on, the metadata's `scopes_supported` lists `notes:write`, so clients ask for it. Define that scope in your authorization server.
+- **`token`, `none`, and stdio:** the caller has every scope.
 
 ## Use static tokens
 
