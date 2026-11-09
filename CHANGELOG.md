@@ -4,6 +4,10 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Fixed
+
+- With `MCP_AUTH_MODE=oauth`, an unreachable issuer or unusable metadata now stops the server with a clear message and exit code 2, not a traceback. Metadata that isn't a JSON object falls through to the next discovery URL.
+
 ### Changed
 
 - Ruff's `T20` rule now flags `print`, which would corrupt stdio messages.
