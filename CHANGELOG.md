@@ -6,6 +6,7 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ### Added
 
+- `docs/auth.md` covers running behind a proxy: the HTTP transport has no rate limit, the `Host` check, and `FORWARDED_ALLOW_IPS`.
 - **Breaking:** per-tool scopes. With `MCP_AUTH_MODE=oauth`, `create_note` now needs the `notes:write` scope, and the protected resource metadata lists it while the notes tools are on. Static tokens, no auth, and stdio have every scope, so `whoami` now shows `notes:write` for a static token.
 
 ### Fixed

@@ -49,6 +49,14 @@ MCP_AUTH_TOKENS=<A_LONG_RANDOM_TOKEN>
 
 Generate a token with `openssl rand -hex 32`. Each one must be at least 16 characters. Clients send it as `Authorization: Bearer <token>`.
 
+## Run behind a proxy
+
+- **Rate limits:** the HTTP transport has none. In production, put it behind a gateway or reverse proxy that limits requests per client or token.
+- **Host check:** the proxy must pass the original `Host` header, or you must add the host it sends to `MCP_ALLOWED_HOSTS`. Otherwise requests fail with `421`.
+- **Client addresses:** Uvicorn reads `X-Forwarded-For` and `X-Forwarded-Proto` only from the addresses in `FORWARDED_ALLOW_IPS`. Set it to your proxy's address, such as `FORWARDED_ALLOW_IPS=10.0.0.5`, so logs show real client addresses. Use `*` only if nothing but the proxy can reach the server.
+
+Auth doesn't depend on these headers: the audience and metadata URLs come from `MCP_PUBLIC_URL`.
+
 ## Settings
 
 | Variable | Type | Default | Description |
@@ -62,4 +70,5 @@ Generate a token with `openssl rand -hex 32`. Each one must be at least 16 chara
 | `MCP_AUTH_JWKS_URL` | URL | Discovered | OAuth signing keys |
 | `MCP_AUTH_TOKENS` | list | None | Static tokens |
 | `MCP_AUTH_SCOPES` | string | `mcp` | Space-separated scopes every token needs |
+| `FORWARDED_ALLOW_IPS` | list | `127.0.0.1,::1` | Proxy addresses whose `X-Forwarded-*` headers Uvicorn trusts |
 | `LOG_LEVEL` | string | `info` | `debug`, `info`, `warning`, or `error` |
