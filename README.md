@@ -13,7 +13,7 @@ A production-ready Model Context Protocol server in Python, ready to customize w
 - **Two transports:** stdio for Claude Code, Claude Desktop, and Cursor, plus stateless Streamable HTTP that scales horizontally.
 - **Secure HTTP:** OAuth per the MCP authorization spec, or static tokens. It won't start without an auth mode, and it blocks DNS rebinding.
 - **Typed tools:** `get_time`, `search_docs`, and `whoami` use type hints and Pydantic models as their schemas, with annotations and readable errors, plus `docs://` resources.
-- **Backend integration:** `list_notes` and `create_note` call a REST API with timeouts, validated responses, and errors the model can act on. See [Connect a backend API](docs/upstream.md).
+- **Backend integration:** `list_notes` and `create_note` call any REST API that meets a documented notes contract, with timeouts, validated responses, and errors the model can act on. See [Connect a backend API](docs/upstream.md).
 - **Real tests:** tools are tested through real MCP clients in process, over stdio, and over HTTP, on both protocol eras, plus the built wheel and the Docker image.
 - **Strict gates:** Ruff, mypy in strict mode, and 90% coverage.
 - **Publishing:** releases to PyPI, the MCP Registry, and GHCR, with a test that keeps `server.json` and `pyproject.toml` in step.
@@ -57,7 +57,7 @@ Or select **Use this template** on GitHub. That copy keeps the name `mcp-server-
 | Try the tools in the MCP Inspector | `make inspect` |
 | Serve over HTTP on your machine | `cp .env.example .env`, then `make dev` |
 | Run lint, types, tests with coverage, and repo checks | `make verify` |
-| Test the built wheel, the Docker image, and a real backend | `make e2e` |
+| Test the built wheel, the Docker image, and an example backend | `make e2e` |
 | Fix formatting and lint you can fix automatically | `make format` |
 
 To work in a dev container, open the folder in one: `.devcontainer/` has Python, uv, and jq, so `make verify` runs inside it. `make e2e` needs Docker on the host. Over HTTP, the server needs an auth mode. See [Configure HTTP auth](docs/auth.md).
