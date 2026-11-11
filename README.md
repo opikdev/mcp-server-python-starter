@@ -40,6 +40,16 @@ docker compose up --build --wait mcp
 
 The server is now at `http://localhost:3000/mcp`, with the dev token `dev-token-change-me-0123`. To connect Claude Code, Claude Desktop, Cursor, or VS Code, see [Connect a client](docs/clients.md).
 
+## Start your own project
+
+Create a renamed copy with [pik](https://github.com/opikdev/pik). It downloads this starter's latest release, then sets your project name and GitHub owner:
+
+```sh
+pik new mcp-server-python-starter my-mcp-server
+```
+
+Or select **Use this template** on GitHub. That copy keeps the name `mcp-server-python-starter` and the owner `opikdev`, so follow `pik.yaml` by hand: swap the `replace` text, delete the `exclude` paths, and run the `setup` commands.
+
 ## Usage
 
 | Task | Command |
