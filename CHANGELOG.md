@@ -8,6 +8,10 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 - The README explains how to start a project with `pik new` or GitHub's **Use this template**. `pik new` removes that section from the project it creates.
 
+### Changed
+
+- `docs/upstream.md` documents the notes API contract: endpoints, fields, auth, errors, and timeouts. Any API that meets it works. `compose.upstream.yaml` is labeled an optional example backend and runs `api-hono-starter` 0.4.0.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

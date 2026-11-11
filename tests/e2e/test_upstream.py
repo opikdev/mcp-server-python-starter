@@ -1,4 +1,4 @@
-"""Runs the notes tools against a real api-hono-starter and Postgres from compose.upstream.yaml."""
+"""Runs the notes tools against the example backend in compose.upstream.yaml."""
 
 import os
 import subprocess

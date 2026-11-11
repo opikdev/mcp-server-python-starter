@@ -1,4 +1,5 @@
-# A real notes API to try the notes tools against: api-hono-starter with Postgres.
+# Optional example backend for the notes tools: api-hono-starter's released image with Postgres.
+# Any API that meets the contract in docs/upstream.md works. Point UPSTREAM_API_URL at yours instead.
 name: notes-upstream
 
 services:
@@ -15,7 +16,7 @@ services:
       retries: 90
 
   migrate:
-    image: ghcr.io/opikdev/api-hono-starter:0.2.1
+    image: ghcr.io/opikdev/api-hono-starter:0.4.0
     command: [sh, -c, node src/db/migrate.ts && node src/db/seed.ts]
     environment:
       MIGRATION_DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/api
@@ -25,7 +26,7 @@ services:
         condition: service_healthy
 
   api:
-    image: ghcr.io/opikdev/api-hono-starter:0.2.1
+    image: ghcr.io/opikdev/api-hono-starter:0.4.0
     environment:
       DATABASE_URL: postgres://api_owner:api_owner_dev_password@db:5432/api
     ports:

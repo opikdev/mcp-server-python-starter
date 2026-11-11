@@ -7,7 +7,7 @@ A production-ready MCP server in Python, built on the official MCP Python SDK v2
 | [docs/architecture.md](docs/architecture.md) | How requests flow, and where tools live |
 | [docs/auth.md](docs/auth.md) | HTTP auth modes and settings |
 | [docs/clients.md](docs/clients.md) | How to connect Claude Code, Claude Desktop, Cursor, and VS Code |
-| [docs/upstream.md](docs/upstream.md) | How tools call a backend API |
+| [docs/upstream.md](docs/upstream.md) | How tools call a backend API, and the notes API contract |
 | [docs/publishing.md](docs/publishing.md) | Releasing to PyPI, the MCP Registry, and GHCR |
 | [docs/decisions/](docs/decisions/) | Why it's built this way |
 | `.agents/skills/` | Step-by-step guides for recurring tasks |
@@ -21,7 +21,7 @@ A production-ready MCP server in Python, built on the official MCP Python SDK v2
 | Try the tools in the MCP Inspector | `make inspect` |
 | Serve over HTTP on your machine | `cp .env.example .env`, then `make dev` |
 | Run all gates | `make verify` |
-| Test the built wheel, Docker image, and a real backend | `make e2e` |
+| Test the built wheel, Docker image, and an example backend | `make e2e` |
 | Fix formatting | `make format` |
 
 ## Rules

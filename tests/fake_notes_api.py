@@ -1,4 +1,4 @@
-"""An in-memory notes API with the same shape as api-hono-starter's, for fast tests."""
+"""An in-memory notes API that meets the contract in docs/upstream.md, for fast tests."""
 
 from typing import Any
 
