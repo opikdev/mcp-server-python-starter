@@ -17,6 +17,9 @@ replace:
   - from: '"extends": ["config:recommended", "github>opikdev/starters//renovate/baseline"]'
     to: '"extends": ["config:recommended"]'
     files: [renovate.json]
+  - from: "## Start your own project\n\nCreate a renamed copy with [pik](https://github.com/opikdev/pik). It downloads this starter's latest release, then sets your project name and GitHub owner:\n\n```sh\npik new mcp-server-python-starter my-mcp-server\n```\n\nOr select **Use this template** on GitHub. That copy keeps the name `mcp-server-python-starter` and the owner `opikdev`, so follow `pik.yaml` by hand: swap the `replace` text, delete the `exclude` paths, and run the `setup` commands.\n\n## Usage\n"
+    to: "## Usage\n"
+    files: [README.md]
   - from: "opikdev/mcp-server-python-starter\ncd mcp-server-python-starter\n"
     to: "{{owner}}/{{name}}\ncd {{name}}\n"
     files: [README.md]
