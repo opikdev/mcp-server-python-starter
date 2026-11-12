@@ -38,11 +38,13 @@ replace:
   - from: 'mcp-server-python-starter = "mcp_app'
     to: '{{name}} = "mcp_app'
     files: [pyproject.toml]
+  - from: 'CMD ["mcp-server-python-starter"'
+    to: 'CMD ["{{name}}"'
+    files: [Dockerfile]
   - from: mcp-server-python-starter
     to: "{{name}}"
     files:
       - .devcontainer/devcontainer.json
-      - Dockerfile
       - Makefile
       - compose.yaml
       - docs/clients.md
