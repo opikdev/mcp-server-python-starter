@@ -136,6 +136,20 @@ async def test_turns_a_failed_exchange_into_a_tool_error_and_logs_it_without_the
     assert CALLER_TOKEN not in json.dumps(record.__dict__, default=str)
 
 
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [("invalid_target", "invalid_target"), ("client secret s3cret was wrong", None)],
+)
+async def test_logs_only_standard_oauth_error_codes(
+    caplog: pytest.LogCaptureFixture, error: str, reason: str | None
+) -> None:
+    server = AuthorizationServer(httpx2.Response(400, json={"error": error}))
+    with caplog.at_level(logging.INFO), pytest.raises(UpstreamError):
+        await exchange(server, [0.0]).token(caller())
+    [record] = [record for record in caplog.records if record.msg == "Token exchange failed"]
+    assert record.__dict__["reason"] == reason
+
+
 async def test_explains_an_unreachable_authorization_server() -> None:
     def handle(_: httpx2.Request) -> httpx2.Response:
         raise httpx2.ConnectError("refused")

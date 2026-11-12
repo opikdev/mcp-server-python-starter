@@ -26,6 +26,18 @@ EXPIRY_MARGIN_SECONDS = 30
 MAX_CACHED_TOKENS = 1000
 
 logger = logging.getLogger(__name__)
+OAUTH_ERROR_CODES = {
+    code: code
+    for code in (
+        "invalid_request",
+        "invalid_client",
+        "invalid_grant",
+        "unauthorized_client",
+        "unsupported_grant_type",
+        "invalid_scope",
+        "invalid_target",
+    )
+}
 
 
 class Credentials(Protocol):
@@ -160,4 +172,4 @@ def _oauth_error(response: httpx2.Response) -> str | None:
         error = response.json().get("error")
     except ValueError, AttributeError:
         return None
-    return error if isinstance(error, str) else None
+    return OAUTH_ERROR_CODES.get(error) if isinstance(error, str) else None
