@@ -5,19 +5,20 @@ from typing import Annotated, Literal
 from mcp.server import MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import BaseModel
 
-from mcp_app.models import CamelModel
+from mcp_app.auth.scopes import BASE_SCOPE, ToolScopes
 
 Transport = Literal["stdio", "http"]
 
 
-class Caller(CamelModel):
+class Caller(BaseModel):
     transport: Transport
     client_id: str | None
     scopes: list[str]
 
 
-def register_whoami_tool(server: MCPServer, transport: Transport) -> None:
+def register_whoami_tool(server: MCPServer, transport: Transport, scopes: ToolScopes) -> None:
     @server.tool(
         title="Who am I",
         annotations=ToolAnnotations(
@@ -28,12 +29,13 @@ def register_whoami_tool(server: MCPServer, transport: Transport) -> None:
         ),
     )
     def whoami() -> Annotated[CallToolResult, Caller]:
-        """Returns how the caller is connected and, over HTTP, the client and its scopes."""
+        """Returns how the caller is connected, the client over HTTP, and the caller's scopes."""
         token = get_access_token()
         caller = Caller(
             transport=transport,
             client_id=token.client_id if token else None,
-            scopes=token.scopes if token else [],
+            # Without a token, over stdio or with no auth, the caller has every scope.
+            scopes=token.scopes if token else [BASE_SCOPE, *scopes.supported],
         )
         who = f"client {caller.client_id}" if caller.client_id else "an unauthenticated caller"
         return CallToolResult(

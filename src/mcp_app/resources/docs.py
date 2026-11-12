@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from mcp.server import MCPServer
-from mcp.server.mcpserver.exceptions import ResourceError
+from mcp.server.mcpserver.exceptions import ResourceNotFoundError
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ def register_docs(server: MCPServer) -> None:
     def read_doc(slug: str) -> str:
         doc = next((candidate for candidate in DOCS if candidate.slug == slug), None)
         if doc is None:
-            raise ResourceError(
+            raise ResourceNotFoundError(
                 f"No doc at {doc_uri(slug)}. List resources to see the available docs."
             )
         return _render(doc)

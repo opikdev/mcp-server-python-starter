@@ -5,6 +5,8 @@ import logging
 import sys
 from datetime import UTC, datetime
 
+from opentelemetry import trace
+
 from mcp_app.config import LogLevel
 
 _STANDARD = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime", "taskName"}
@@ -18,6 +20,10 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "msg": record.getMessage(),
         }
+        span = trace.get_current_span().get_span_context()
+        if span.is_valid:
+            entry["trace_id"] = format(span.trace_id, "032x")
+            entry["span_id"] = format(span.span_id, "016x")
         entry.update({key: value for key, value in record.__dict__.items() if key not in _STANDARD})
         if record.exc_info:
             entry["error"] = self.formatException(record.exc_info)

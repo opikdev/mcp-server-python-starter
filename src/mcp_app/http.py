@@ -1,45 +1,31 @@
-"""The Streamable HTTP app: health, protected resource metadata, bearer auth, and MCP."""
+"""The Streamable HTTP app: health, readiness, resource metadata, bearer auth, and MCP."""
 
 import contextlib
-from collections.abc import AsyncIterator, Callable
-from datetime import datetime
+from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 
+from mcp.server import MCPServer
+from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
+from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend
 from mcp.server.auth.provider import TokenVerifier
-from mcp.server.auth.routes import create_protected_resource_routes
-from mcp.server.auth.settings import AuthSettings
+from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
 from mcp.server.transport_security import TransportSecuritySettings
+from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
+from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
-from starlette.routing import Mount, Route
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Route
+from starlette.types import ASGIApp, Receive, Scope, Send
 
-from mcp_app.auth.scopes import NOTES_WRITE
+from mcp_app.auth.challenge import BearerChallenge
+from mcp_app.auth.scopes import ToolScopes
 from mcp_app.config import HttpConfig, NoAuthConfig, OAuthConfig
-from mcp_app.server import create_server
-from mcp_app.upstream.notes_client import NotesClient
+from mcp_app.telemetry import Telemetry
 
-
-def _auth_settings(config: HttpConfig) -> AuthSettings | None:
-    match config.auth:
-        case OAuthConfig(issuer=issuer, scopes=scopes):
-            return AuthSettings(
-                issuer_url=issuer,
-                resource_server_url=config.public_url,
-                required_scopes=scopes,
-                # JwtVerifier checks the audience itself.
-                validate_token_resource=False,
-            )
-        case NoAuthConfig():
-            return None
-        case token:
-            # Static tokens have no authorization server, so publish no resource metadata.
-            # The SDK needs an issuer to turn auth on, but nothing reads it without metadata.
-            return AuthSettings(
-                issuer_url=config.public_url,
-                resource_server_url=None,
-                required_scopes=token.scopes,
-            )
+PROBE_PATHS = "/healthz$,/readyz$"
 
 
 def _transport_security(config: HttpConfig) -> TransportSecuritySettings:
@@ -54,16 +40,25 @@ def _transport_security(config: HttpConfig) -> TransportSecuritySettings:
     )
 
 
-def _metadata_routes(auth: AuthSettings | None, notes: NotesClient | None) -> list[Route]:
-    if auth is None or auth.resource_server_url is None:
-        return []
-    # This route shadows the SDK's, which lists only the scopes every token needs. List a tool
-    # scope only while its tool is on, because some authorization servers reject unknown scopes.
-    tool_scopes = [NOTES_WRITE] if notes is not None else []
-    return create_protected_resource_routes(
-        resource_url=auth.resource_server_url,
-        authorization_servers=[auth.issuer_url],
-        scopes_supported=list(dict.fromkeys([*(auth.required_scopes or []), *tool_scopes])),
+class PostOnly:
+    """Refuses GET, which would open a stream that a stateless server never writes to."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["method"] == "GET":
+            await Response(status_code=405, headers={"Allow": "POST"})(scope, receive, send)
+            return
+        await self._app(scope, receive, send)
+
+
+def _problem(status: int, title: str, detail: str) -> JSONResponse:
+    return JSONResponse(
+        {"type": "about:blank", "title": title, "status": status, "detail": detail},
+        status_code=status,
+        media_type="application/problem+json",
+        headers={"Retry-After": "5"},
     )
 
 
@@ -71,35 +66,88 @@ async def _health(_: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+async def _ready(request: Request) -> JSONResponse:
+    if request.app.state.draining:
+        return _problem(503, "Draining", "The server is shutting down. Use another instance.")
+    if not request.app.state.ready:
+        return _problem(503, "Starting", "The server isn't ready yet.")
+    return JSONResponse({"status": "ok"})
+
+
 def create_http_app(
     config: HttpConfig,
     *,
+    server: MCPServer,
+    tool_scopes: ToolScopes,
     verifier: TokenVerifier | None,
-    notes: NotesClient | None = None,
-    now: Callable[[], datetime] | None = None,
+    telemetry: Telemetry | None = None,
 ) -> Starlette:
-    auth = _auth_settings(config) if verifier else None
-    server = create_server(
-        transport="http", notes=notes, token_verifier=verifier, auth=auth, now=now
+    """Serves `server` at the path of `MCP_PUBLIC_URL`.
+
+    Set `app.state.draining` to fail readiness while still serving, before a shutdown.
+    """
+    # SSE responses, not JSON-only, so progress and log notifications reach HTTP clients as
+    # they reach stdio clients. JSON-only responses would drop them.
+    mcp_app: ASGIApp = PostOnly(
+        server.streamable_http_app(
+            streamable_http_path=config.path,
+            stateless_http=True,
+            json_response=False,
+            transport_security=_transport_security(config),
+            host=config.host,
+        )
     )
-    mcp_app = server.streamable_http_app(
-        streamable_http_path=config.path,
-        stateless_http=True,
-        json_response=True,
-        transport_security=_transport_security(config),
-        host=config.host,
-    )
+    routes = [
+        Route("/healthz", _health, methods=["GET"]),
+        Route("/readyz", _ready, methods=["GET"]),
+    ]
+    middleware: list[Middleware] = []
+    if verifier is not None and not isinstance(config.auth, NoAuthConfig):
+        metadata_url = None
+        if isinstance(config.auth, OAuthConfig):
+            resource = AnyHttpUrl(config.public_url)
+            metadata_url = str(build_resource_metadata_url(resource))
+            # Every scope a token needs, then each tool's scope, so clients ask for them.
+            routes.extend(
+                create_protected_resource_routes(
+                    resource_url=resource,
+                    authorization_servers=[AnyHttpUrl(config.auth.issuer)],
+                    scopes_supported=list(
+                        dict.fromkeys([*config.auth.scopes, *tool_scopes.supported])
+                    ),
+                )
+            )
+        mcp_app = BearerChallenge(
+            mcp_app,
+            required_scopes=config.auth.scopes,
+            tool_scopes=tool_scopes,
+            resource_metadata_url=metadata_url,
+        )
+        middleware = [
+            Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(verifier)),
+            Middleware(AuthContextMiddleware),
+        ]
+    routes.append(Route(config.path, mcp_app))
+    if telemetry is not None:
+        # Probes run every few seconds, so tracing them would bury real requests.
+        middleware.insert(
+            0,
+            Middleware(
+                OpenTelemetryMiddleware,
+                excluded_urls=PROBE_PATHS,
+                tracer_provider=telemetry.tracer_provider,
+                meter_provider=telemetry.meter_provider,
+                exclude_spans=["receive", "send"],
+            ),
+        )
 
     @contextlib.asynccontextmanager
-    async def lifespan(_: Starlette) -> AsyncIterator[None]:
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:
         async with server.session_manager.run():
+            app.state.ready = True
             yield
 
-    return Starlette(
-        routes=[
-            Route("/healthz", _health, methods=["GET"]),
-            *_metadata_routes(auth, notes),
-            Mount("/", app=mcp_app),
-        ],
-        lifespan=lifespan,
-    )
+    app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
+    app.state.ready = False
+    app.state.draining = False
+    return app

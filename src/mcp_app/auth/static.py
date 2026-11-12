@@ -5,8 +5,6 @@ import hmac
 
 from mcp.server.auth.provider import AccessToken
 
-from mcp_app.auth.scopes import TOOL_SCOPES
-
 
 def _digest(value: str) -> bytes:
     return hashlib.sha256(value.encode()).digest()
@@ -15,12 +13,12 @@ def _digest(value: str) -> bytes:
 class StaticTokenVerifier:
     """Accepts any of the configured tokens, comparing digests in constant time.
 
-    A static token has no scopes of its own, so it gets every tool scope.
+    A static token has no scopes of its own, so pass every scope the server uses.
     """
 
     def __init__(self, tokens: list[str], scopes: list[str]) -> None:
         self._digests = [_digest(token) for token in tokens]
-        self._scopes = list(dict.fromkeys([*scopes, *TOOL_SCOPES]))
+        self._scopes = list(dict.fromkeys(scopes))
 
     async def verify_token(self, token: str) -> AccessToken | None:
         actual = _digest(token)

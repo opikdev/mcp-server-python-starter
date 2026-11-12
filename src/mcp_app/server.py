@@ -1,13 +1,14 @@
 """Builds the MCP server with every tool and resource. Both transports share it."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from typing import Any
 
 from mcp.server import MCPServer
-from mcp.server.auth.provider import TokenVerifier
-from mcp.server.auth.settings import AuthSettings
+from mcp.server.context import ServerMiddleware
 
 from mcp_app import __version__
+from mcp_app.auth.scopes import ToolScopes
 from mcp_app.resources.docs import register_docs
 from mcp_app.tools.notes import register_notes_tools
 from mcp_app.tools.search_docs import register_search_docs_tool
@@ -31,21 +32,22 @@ def create_server(
     transport: Transport,
     notes: NotesClient | None = None,
     now: Callable[[], datetime] | None = None,
-    token_verifier: TokenVerifier | None = None,
-    auth: AuthSettings | None = None,
+    tool_scopes: ToolScopes | None = None,
+    middleware: Sequence[ServerMiddleware[Any]] = (),
 ) -> MCPServer:
+    """Builds the server. Pass `tool_scopes` to read the scope each registered tool needs."""
+    scopes = tool_scopes or ToolScopes()
     server = MCPServer(
         "mcp-server-python-starter",
         title="MCP server Python starter",
         version=__version__,
         instructions=INSTRUCTIONS + (NOTES_INSTRUCTIONS if notes is not None else ""),
-        token_verifier=token_verifier,
-        auth=auth,
+        middleware=middleware,
     )
     register_time_tool(server, now or _utc_now)
     register_search_docs_tool(server)
-    register_whoami_tool(server, transport)
+    register_whoami_tool(server, transport, scopes)
     if notes is not None:
-        register_notes_tools(server, notes)
+        register_notes_tools(server, notes, scopes)
     register_docs(server)
     return server
