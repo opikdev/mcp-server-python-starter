@@ -1,15 +1,16 @@
 import logging
+import re
 import sys
 from collections.abc import AsyncIterator
 
 import pytest
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
-from mcp.types import ResourceLink, TextContent, TextResourceContents
+from mcp.shared.exceptions import MCPError
+from mcp.types import INVALID_PARAMS, ResourceLink, TextContent, TextResourceContents
 
 from mcp_app.server import create_server
-from mcp_app.upstream.notes_client import NotesClient
-from tests.helpers import FIXED_NOW
+from tests.helpers import FIXED_NOW, notes_client
 
 pytestmark = pytest.mark.anyio
 
@@ -29,7 +30,7 @@ async def test_serves_tools_from_a_real_process() -> None:
     process = StdioServerParameters(command=sys.executable, args=["-m", "mcp_app"])
     async with Client(process) as client:
         result = await client.call_tool("whoami", {})
-    assert result.structured_content == {"transport": "stdio", "clientId": None, "scopes": []}
+    assert result.structured_content == {"transport": "stdio", "client_id": None, "scopes": ["mcp"]}
 
 
 @pytest.mark.parametrize(("mode", "version"), [("auto", "2026-07-28"), ("legacy", "2025-11-25")])
@@ -41,7 +42,7 @@ async def test_serves_both_protocol_eras(mode: str, version: str) -> None:
 
 @pytest.fixture
 async def client_with_notes() -> AsyncIterator[Client]:
-    notes = NotesClient(base_url="http://notes.test", token="unused-token", timeout_seconds=1)
+    notes = notes_client("unused-token")
     async with Client(create_server(transport="stdio", notes=notes)) as connected:
         yield connected
     await notes.aclose()
@@ -64,6 +65,25 @@ async def test_every_tool_has_a_title_schemas_and_every_annotation(
             hints.idempotent_hint,
             hints.open_world_hint,
         ), tool.name
+
+
+def property_names(schema: object) -> list[str]:
+    if isinstance(schema, list):
+        return [name for item in schema for name in property_names(item)]
+    if not isinstance(schema, dict):
+        return []
+    own = list(schema.get("properties", {}))
+    return own + [name for value in schema.values() for name in property_names(value)]
+
+
+async def test_every_tool_names_inputs_and_outputs_in_snake_case(
+    client_with_notes: Client,
+) -> None:
+    for tool in (await client_with_notes.list_tools()).tools:
+        names = property_names(tool.input_schema) + property_names(tool.output_schema)
+        assert names, tool.name
+        for name in names:
+            assert re.fullmatch(r"[a-z][a-z0-9]*(_[a-z0-9]+)*", name), f"{tool.name}: {name}"
 
 
 async def test_lists_the_sample_tools_as_read_only(client: Client) -> None:
@@ -142,9 +162,11 @@ async def test_lists_and_reads_docs_resources(client: Client) -> None:
     assert contents[0].text.startswith("# Adding tools\n")
 
 
-async def test_fails_clearly_for_an_unknown_doc(client: Client) -> None:
-    with pytest.raises(Exception, match="No doc at docs://missing"):
+async def test_reports_an_unknown_doc_as_invalid_params(client: Client) -> None:
+    with pytest.raises(MCPError, match="No doc at docs://missing") as error:
         await client.read_resource("docs://missing")
+    assert error.value.error.code == INVALID_PARAMS
+    assert error.value.error.data == {"uri": "docs://missing"}
 
 
 async def test_hides_an_unexpected_error_from_the_model_and_logs_it(

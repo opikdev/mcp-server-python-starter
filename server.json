@@ -12,7 +12,120 @@
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
-      }
+      },
+      "environmentVariables": [
+        {
+          "name": "UPSTREAM_API_URL",
+          "description": "Base URL of the notes API. Unset hides the notes tools."
+        },
+        {
+          "name": "UPSTREAM_API_TOKEN",
+          "description": "Token the server sends to the notes API. Required with UPSTREAM_API_URL.",
+          "isSecret": true
+        },
+        {
+          "name": "UPSTREAM_TIMEOUT_MS",
+          "description": "How long each notes API call may take in total, in milliseconds.",
+          "format": "number",
+          "default": "5000"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/opikdev/mcp-server-python-starter:0.2.0",
+      "runtimeHint": "docker",
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "-p",
+          "value": "127.0.0.1:3000:3000",
+          "description": "Publishes the HTTP port on localhost."
+        }
+      ],
+      "transport": {
+        "type": "streamable-http",
+        "url": "http://localhost:3000/mcp"
+      },
+      "environmentVariables": [
+        {
+          "name": "MCP_AUTH_MODE",
+          "description": "How HTTP callers authenticate: oauth for production, or token for static bearer tokens.",
+          "isRequired": true,
+          "choices": [
+            "oauth",
+            "token"
+          ]
+        },
+        {
+          "name": "MCP_AUTH_TOKENS",
+          "description": "With token: comma-separated bearer tokens, at least 16 characters each.",
+          "isSecret": true
+        },
+        {
+          "name": "MCP_AUTH_ISSUER",
+          "description": "With oauth: the authorization server's issuer URL. Must use https:// outside localhost."
+        },
+        {
+          "name": "MCP_AUTH_JWKS_URL",
+          "description": "With oauth: the issuer's JWKS URL. Discovered from the issuer when unset."
+        },
+        {
+          "name": "MCP_AUTH_SCOPES",
+          "description": "Space-separated scopes every token must have.",
+          "default": "mcp"
+        },
+        {
+          "name": "MCP_PUBLIC_URL",
+          "description": "The URL clients use, and the expected OAuth token audience.",
+          "default": "http://localhost:3000/mcp"
+        },
+        {
+          "name": "MCP_ALLOWED_HOSTS",
+          "description": "Comma-separated Host headers to accept. Defaults to localhost and the MCP_PUBLIC_URL host."
+        },
+        {
+          "name": "UPSTREAM_API_URL",
+          "description": "Base URL of the notes API. Unset hides the notes tools."
+        },
+        {
+          "name": "UPSTREAM_AUTH",
+          "description": "How the server authenticates to the notes API: static sends UPSTREAM_API_TOKEN, exchange swaps each caller's token (RFC 8693).",
+          "choices": [
+            "static",
+            "exchange"
+          ],
+          "default": "static"
+        },
+        {
+          "name": "UPSTREAM_API_TOKEN",
+          "description": "With static: the token the server sends to the notes API.",
+          "isSecret": true
+        },
+        {
+          "name": "UPSTREAM_TIMEOUT_MS",
+          "description": "How long each notes API call may take in total, in milliseconds.",
+          "format": "number",
+          "default": "5000"
+        },
+        {
+          "name": "UPSTREAM_AUDIENCE",
+          "description": "With exchange: the audience to request for the notes API."
+        },
+        {
+          "name": "TOKEN_EXCHANGE_URL",
+          "description": "With exchange: the authorization server's token endpoint."
+        },
+        {
+          "name": "TOKEN_EXCHANGE_CLIENT_ID",
+          "description": "With exchange: the client ID this server authenticates as."
+        },
+        {
+          "name": "TOKEN_EXCHANGE_CLIENT_SECRET",
+          "description": "With exchange: the client secret this server authenticates with.",
+          "isSecret": true
+        }
+      ]
     }
   ]
 }

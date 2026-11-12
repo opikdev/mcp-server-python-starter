@@ -25,7 +25,7 @@ replace:
     files: [README.md]
   - from: opikdev/mcp-server-python-starter
     to: "{{owner}}/{{name}}"
-    files: [README.md, pyproject.toml, server.json]
+    files: [README.md, pyproject.toml, server.json, Dockerfile]
   - from: 'authors = [{ name = "opikdev" }]'
     to: 'authors = [{ name = "{{owner}}" }]'
     files: [pyproject.toml]

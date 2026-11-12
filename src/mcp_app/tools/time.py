@@ -8,12 +8,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import Field
-
-from mcp_app.models import CamelModel
+from pydantic import BaseModel, Field
 
 
-class Time(CamelModel):
+class Time(BaseModel):
     iso: str = Field(description="The time in UTC, in ISO 8601.")
     timezone: str
     local: str = Field(description="The local date and time, for people to read.")

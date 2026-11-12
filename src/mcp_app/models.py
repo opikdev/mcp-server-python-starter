@@ -1,12 +1,14 @@
-"""The base for models that cross a boundary: tool results and backend API responses."""
+"""The base for backend API responses, which often use camelCase JSON."""
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 
-class CamelModel(BaseModel):
-    """Uses snake_case fields in Python and camelCase names in JSON, both ways."""
+class ApiModel(BaseModel):
+    """Reads camelCase JSON, such as the notes API's `nextCursor`, into snake_case fields.
 
-    model_config = ConfigDict(
-        alias_generator=to_camel, populate_by_name=True, serialize_by_alias=True
-    )
+    Tool results don't use it: the SDK names tool inputs after Python parameters, so results
+    are plain models with snake_case fields too.
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, validate_by_name=True)

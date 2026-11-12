@@ -26,12 +26,12 @@ def verifier(key: SigningKey) -> JwtVerifier:
 
 async def test_static_verifier_accepts_each_configured_token() -> None:
     tokens = ["first-token-0123456", "second-token-012345"]
-    static = StaticTokenVerifier(tokens, ["mcp"])
+    static = StaticTokenVerifier(tokens, ["mcp", "notes:read", "mcp"])
     first, second = [await static.verify_token(token) for token in tokens]
     assert first is not None
     assert second is not None
     assert (first.client_id, second.client_id) == ("token-1", "token-2")
-    assert second.scopes == ["mcp", "notes:write"]
+    assert second.scopes == ["mcp", "notes:read"]
     assert await static.verify_token("first-token-012345") is None
 
 

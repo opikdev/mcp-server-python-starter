@@ -1,16 +1,16 @@
 """Runs the real entry point in a subprocess, as clients and containers do."""
 
-import contextlib
 import json
 import os
 import signal
 import subprocess
-import sys
-import time
+import threading
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
 
+import anyio
+import anyio.to_thread
 import httpx2
 import pytest
 from mcp import Client
@@ -20,11 +20,18 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from tests.helpers import TOKEN, SigningKey, claims, free_port, http_client, serve
+from tests.helpers import (
+    COMMAND,
+    TOKEN,
+    SigningKey,
+    claims,
+    free_port,
+    http_client,
+    serve,
+    serve_cli,
+)
 
 pytestmark = pytest.mark.anyio
-
-COMMAND = [sys.executable, "-m", "mcp_app"]
 
 
 def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -45,6 +52,22 @@ def test_prints_its_version() -> None:
     assert result.stdout.strip() == pyproject["project"]["version"]
 
 
+def test_refuses_token_exchange_over_stdio() -> None:
+    result = run(
+        env={
+            "UPSTREAM_API_URL": "https://notes.example.com",
+            "UPSTREAM_AUTH": "exchange",
+            "MCP_AUTH_MODE": "oauth",
+            "TOKEN_EXCHANGE_URL": "https://auth.example.com/token",
+            "TOKEN_EXCHANGE_CLIENT_ID": "mcp-server",
+            "TOKEN_EXCHANGE_CLIENT_SECRET": "exchange-secret",
+            "UPSTREAM_AUDIENCE": "notes-api",
+        }
+    )
+    assert result.returncode == 2
+    assert "UPSTREAM_AUTH=exchange works only over HTTP" in result.stderr
+
+
 def test_explains_a_bad_setting_and_exits_with_code_2() -> None:
     result = run("--http", env={"MCP_AUTH_MODE": ""})
     assert result.returncode == 2
@@ -57,33 +80,6 @@ async def test_keeps_stdout_for_protocol_messages_and_logs_json_to_stderr() -> N
     async with Client(process) as client:
         result = await client.call_tool("get_time", {"timezone": "UTC"})
     assert result.is_error is False
-
-
-@contextlib.contextmanager
-def serve_cli(env: dict[str, str]) -> Iterator[tuple[subprocess.Popen[str], str]]:
-    port = free_port()
-    process = subprocess.Popen(
-        [*COMMAND, "--http"],
-        env={**os.environ, "PORT": str(port), "LOG_LEVEL": "info", **env},
-        stderr=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    url = f"http://localhost:{port}"
-    deadline = time.monotonic() + 20
-    while time.monotonic() < deadline:
-        try:
-            if httpx2.get(f"{url}/healthz").status_code == 200:
-                break
-        except httpx2.TransportError:
-            time.sleep(0.1)
-    try:
-        yield process, url
-    finally:
-        if process.poll() is None:
-            # SIGTERM, not SIGKILL, so the process shuts down and saves its coverage.
-            process.terminate()
-            process.communicate(timeout=20)
 
 
 @pytest.fixture
@@ -99,7 +95,7 @@ async def test_serves_http_and_shuts_down_cleanly_on_sigterm(
     async with http_client(f"{url}/mcp", TOKEN) as client:
         result = await client.call_tool("whoami", {})
     assert result.structured_content is not None
-    assert result.structured_content["clientId"] == "token-1"
+    assert result.structured_content["client_id"] == "token-1"
 
     process.send_signal(signal.SIGTERM)
     stdout, stderr = process.communicate(timeout=20)
@@ -110,6 +106,56 @@ async def test_serves_http_and_shuts_down_cleanly_on_sigterm(
     assert any(entry["msg"] == "Serving MCP over HTTP" for entry in entries)
     assert all({"time", "level", "logger", "msg"} <= entry.keys() for entry in entries)
     assert TOKEN not in stderr + stdout
+
+
+def slow_notes_api(started: threading.Event) -> Starlette:
+    async def notes(_: Request) -> JSONResponse:
+        started.set()
+        await anyio.sleep(2)
+        return JSONResponse({"data": [], "meta": {"nextCursor": None}})
+
+    return Starlette(routes=[Route("/v1/notes", notes)])
+
+
+async def test_drains_then_finishes_a_call_in_flight_on_sigterm() -> None:
+    started = threading.Event()
+    api_port = free_port()
+    with (
+        serve(slow_notes_api(started), api_port) as api,
+        serve_cli(
+            {
+                "MCP_AUTH_MODE": "token",
+                "MCP_AUTH_TOKENS": TOKEN,
+                "UPSTREAM_API_URL": api,
+                "UPSTREAM_API_TOKEN": "upstream-token-0123",
+                "SHUTDOWN_DRAIN_SECONDS": "1",
+            }
+        ) as (process, url),
+    ):
+        async with (
+            http_client(f"{url}/mcp", TOKEN) as client,
+            anyio.create_task_group() as tasks,
+            httpx2.AsyncClient() as http,
+        ):
+            results = []
+            # The client validates results against the listed schemas, so list before the drain.
+            await client.list_tools()
+
+            async def list_notes() -> None:
+                results.append(await client.call_tool("list_notes", {}))
+
+            tasks.start_soon(list_notes)
+            await anyio.to_thread.run_sync(started.wait, 10)
+            process.send_signal(signal.SIGTERM)
+            await anyio.sleep(0.3)
+            ready = await http.get(f"{url}/readyz")
+        _, stderr = process.communicate(timeout=20)
+    assert ready.status_code == 503
+    assert results[0].is_error is False
+    assert results[0].structured_content == {"notes": [], "next_cursor": None}
+    assert process.returncode == -signal.SIGTERM
+    messages = [json.loads(line)["msg"] for line in stderr.splitlines() if line.startswith("{")]
+    assert "Draining before shutdown" in messages
 
 
 def authorization_server(key: SigningKey, port: int) -> Starlette:
@@ -140,7 +186,7 @@ async def test_finds_the_issuer_keys_and_accepts_its_tokens() -> None:
         async with http_client(f"{url}/mcp", token) as client:
             result = await client.call_tool("whoami", {})
     assert result.structured_content is not None
-    assert result.structured_content["clientId"] == "client-1"
+    assert result.structured_content["client_id"] == "client-1"
 
 
 def test_explains_an_unreachable_issuer_without_a_traceback() -> None:

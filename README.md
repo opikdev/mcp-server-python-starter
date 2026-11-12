@@ -11,12 +11,13 @@ A production-ready Model Context Protocol server in Python, ready to customize w
 
 - **Current protocol:** built on the official MCP Python SDK v2 and its `MCPServer` API, for the 2026-07-28 spec, while still serving older clients.
 - **Two transports:** stdio for Claude Code, Claude Desktop, and Cursor, plus stateless Streamable HTTP that scales horizontally.
-- **Secure HTTP:** OAuth per the MCP authorization spec, or static tokens. It won't start without an auth mode, and it blocks DNS rebinding.
+- **Secure HTTP:** OAuth per the MCP authorization spec, with per-tool scopes and `403` scope challenges, or static tokens. It won't start without an auth mode, and it blocks DNS rebinding.
 - **Typed tools:** `get_time`, `search_docs`, and `whoami` use type hints and Pydantic models as their schemas, with annotations and readable errors, plus `docs://` resources.
-- **Backend integration:** `list_notes` and `create_note` call any REST API that meets a documented notes contract, with timeouts, validated responses, and errors the model can act on. See [Connect a backend API](docs/upstream.md).
+- **Backend integration:** `list_notes` and `create_note` call any REST API that meets a documented notes contract, with deadlines, validated responses, and errors the model can act on. They use a service account, or act as each user through token exchange. See [Connect a backend API](docs/upstream.md).
+- **Production ready:** readiness and graceful drain, OpenTelemetry traces and metrics, and a [deploy guide](docs/deploy.md) with proxy, TLS, and identity provider setup.
 - **Real tests:** tools are tested through real MCP clients in process, over stdio, and over HTTP, on both protocol eras, plus the built wheel and the Docker image.
 - **Strict gates:** Ruff, mypy in strict mode, and 90% coverage.
-- **Publishing:** releases to PyPI, the MCP Registry, and GHCR, with a test that keeps `server.json` and `pyproject.toml` in step.
+- **Publishing:** releases to PyPI, the MCP Registry, and GHCR, with digest-pinned base images, a vulnerability scan before push, an SBOM, and provenance. A test keeps `server.json`, `pyproject.toml`, and the image label in step.
 - **Agent-ready:** `AGENTS.md`, skills, and checks that run on every commit.
 
 ## Quick start
@@ -30,7 +31,7 @@ make sync
 make inspect
 ```
 
-The MCP Inspector opens in your browser. Connect, list the tools, and call `get_time`.
+The MCP Inspector opens in your browser. Connect, list the tools, and call `get_time`. To try the notes tools too, pass the `UPSTREAM_*` settings, as [Connect a backend API](docs/upstream.md#try-it-with-an-example-api) shows.
 
 To run it over HTTP in Docker instead:
 
@@ -72,8 +73,9 @@ To add a tool, create a module in `src/mcp_app/tools/` with a `register_*` funct
 | `src/mcp_app/server.py` | Builds the server with every tool and resource |
 | `src/mcp_app/tools/` | One module per tool, or a small related set |
 | `src/mcp_app/resources/` | `docs://` resources |
-| `src/mcp_app/http.py`, `src/mcp_app/auth/` | The HTTP app, health check, and token verifiers |
-| `src/mcp_app/upstream/` | Clients for backend APIs |
+| `src/mcp_app/http.py`, `src/mcp_app/auth/` | The HTTP app, health and readiness, token verifiers, and scope challenges |
+| `src/mcp_app/upstream/` | Clients for backend APIs, and the credential each call uses |
+| `compose.auth.yaml`, `keycloak/` | A local Keycloak for OAuth and token exchange |
 | `tests/` | Unit, integration, and end-to-end tests |
 | `server.json` | MCP Registry metadata |
 | `docs/` | [Architecture](docs/architecture.md), guides, and [decisions](docs/decisions/) |
