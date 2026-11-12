@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-python-starter"
-version = "0.2.0"
+version = "0.3.0"
 description = "Production-ready MCP server in Python, with stdio and Streamable HTTP, OAuth, and tool tests"
 readme = "README.md"
 license = "MIT"
