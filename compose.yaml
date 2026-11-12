@@ -10,3 +10,5 @@ services:
       MCP_PUBLIC_URL: http://localhost:${PORT:-3000}/mcp
     ports:
       - 127.0.0.1:${PORT:-3000}:3000
+    # Above the default drain plus shutdown timeout, so requests in flight finish first.
+    stop_grace_period: 45s
