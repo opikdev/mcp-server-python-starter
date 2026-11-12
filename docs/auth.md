@@ -22,23 +22,54 @@ MCP_PUBLIC_URL=https://mcp.example.com/mcp
 
 The server then:
 
-1. Publishes protected resource metadata at `/.well-known/oauth-protected-resource/mcp`, so clients can find your authorization server.
-2. Answers unauthenticated requests with `401` and a `WWW-Authenticate` header pointing to that metadata.
+1. Publishes protected resource metadata at `/.well-known/oauth-protected-resource/mcp`, so clients can find your authorization server. Its `scopes_supported` lists `MCP_AUTH_SCOPES` and the scope of every tool that's on.
+2. Answers a request without a token with `401` and `WWW-Authenticate: Bearer scope="mcp", resource_metadata="…"`. It adds `error="invalid_token"` only when a token was sent and rejected ([RFC 6750](https://www.rfc-editor.org/rfc/rfc6750#section-3.1)).
 3. Accepts only signed JWT access tokens from your issuer, for `MCP_PUBLIC_URL` as the audience, with every scope in `MCP_AUTH_SCOPES`, and an expiry.
-4. Checks the scope each tool that changes data needs. See [Per-tool scopes](#per-tool-scopes).
+4. Checks the scope each tool needs before it runs. See [Per-tool scopes](#per-tool-scopes).
 
-It finds the signing keys through your issuer's metadata. Set `MCP_AUTH_JWKS_URL` if your issuer doesn't publish it.
+It finds the signing keys through your issuer's metadata. Set `MCP_AUTH_JWKS_URL` if your issuer doesn't publish it. `MCP_AUTH_ISSUER`, `MCP_AUTH_JWKS_URL`, and `MCP_PUBLIC_URL` must use `https://`, except on a loopback host. For provider setup, see [Match the token audience](deploy.md#match-the-token-audience).
 
 ## Per-tool scopes
 
-Every token needs the scopes in `MCP_AUTH_SCOPES`. Tools that change data need one more:
+Every token needs the scopes in `MCP_AUTH_SCOPES`. Tools that read or change data need one more:
 
 | Tool | Scope |
 |---|---|
+| `list_notes` | `notes:read` |
 | `create_note` | `notes:write` |
 
-- **`oauth`:** the token's `scope` or `scp` claim must include it. Otherwise the tool returns an error the model can read, and does nothing. While the notes tools are on, the metadata's `scopes_supported` lists `notes:write`, so clients ask for it. Define that scope in your authorization server.
-- **`token`, `none`, and stdio:** the caller has every scope.
+- **`oauth`:** the token's `scope` or `scp` claim must include it. Otherwise the call gets `403` with `WWW-Authenticate: Bearer error="insufficient_scope", scope="mcp notes:write", resource_metadata="…"`, and the tool doesn't run. The client can ask the user for that scope and retry. See [ADR 006](decisions/006-challenge-for-missing-scopes.md).
+- **`token`, `none`, and stdio:** the caller has every scope, so there's no challenge. `whoami` lists them all.
+
+To give a new tool a scope, put `@scopes.require(SCOPE)` under its `@server.tool(...)`, and call `require_scope` first in the tool, as `src/mcp_app/tools/notes.py` does. The metadata and the challenge read the same registrations.
+
+## Run Keycloak locally
+
+`compose.auth.yaml` runs Keycloak with a demo realm: a public `mcp-client` for MCP clients, a confidential `mcp-server` client for token exchange, the `mcp`, `notes:read`, and `notes:write` scopes, and the user `demo` with the password `demo-password-123`. Dev only: its secrets are fixed.
+
+1. Start it:
+
+   ```sh
+   docker compose -f compose.auth.yaml up --wait
+   ```
+
+2. Serve the MCP server with OAuth:
+
+   ```sh
+   MCP_AUTH_MODE=oauth MCP_AUTH_ISSUER=http://localhost:8080/realms/mcp make dev
+   ```
+
+3. Get a token for the demo user. The realm allows the password grant for scripts like this one:
+
+   ```sh
+   TOKEN=$(curl -s localhost:8080/realms/mcp/protocol/openid-connect/token \
+     -d grant_type=password -d client_id=mcp-client -d username=demo \
+     -d password=demo-password-123 -d 'scope=mcp notes:read notes:write' | jq -r .access_token)
+   ```
+
+4. Connect a client to `http://localhost:3000/mcp` with `Authorization: Bearer $TOKEN`, or let a client that supports OAuth sign in through the browser as `mcp-client`.
+
+Tokens carry `http://localhost:3000/mcp` as their audience. If you serve on another URL, start Keycloak with the same `MCP_PUBLIC_URL`. To try token exchange, see [Act as the user](upstream.md#act-as-the-user).
 
 ## Use static tokens
 
@@ -51,11 +82,7 @@ Generate a token with `openssl rand -hex 32`. Each one must be at least 16 chara
 
 ## Run behind a proxy
 
-- **Rate limits:** the HTTP transport has none. In production, put it behind a gateway or reverse proxy that limits requests per client or token.
-- **Host check:** the proxy must pass the original `Host` header, or you must add the host it sends to `MCP_ALLOWED_HOSTS`. Otherwise requests fail with `421`.
-- **Client addresses:** Uvicorn reads `X-Forwarded-For` and `X-Forwarded-Proto` only from the addresses in `FORWARDED_ALLOW_IPS`. Set it to your proxy's address, such as `FORWARDED_ALLOW_IPS=10.0.0.5`, so logs show real client addresses. Use `*` only if nothing but the proxy can reach the server.
-
-Auth doesn't depend on these headers: the audience and metadata URLs come from `MCP_PUBLIC_URL`.
+Put a reverse proxy in front for TLS and rate limits. See [Deploy](deploy.md).
 
 ## Settings
 
@@ -72,3 +99,6 @@ Auth doesn't depend on these headers: the audience and metadata URLs come from `
 | `MCP_AUTH_SCOPES` | string | `mcp` | Space-separated scopes every token needs |
 | `FORWARDED_ALLOW_IPS` | list | `127.0.0.1,::1` | Proxy addresses whose `X-Forwarded-*` headers Uvicorn trusts |
 | `LOG_LEVEL` | string | `info` | `debug`, `info`, `warning`, or `error` |
+| `SHUTDOWN_DRAIN_SECONDS` | number | `5` | After `SIGTERM`, how long to fail `/readyz` while still serving |
+| `SHUTDOWN_TIMEOUT_SECONDS` | number | `30` | Then, how long requests in flight get to finish |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | URL | None | Turns on OpenTelemetry export. See [Telemetry](deploy.md#telemetry) |

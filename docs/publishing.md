@@ -4,13 +4,13 @@ Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It runs lint and te
 
 | Target | Runs when | Setup |
 |---|---|---|
-| Docker image on GHCR, for amd64 and arm64 | Always | None |
+| Docker image on GHCR, for amd64 and arm64 | Always, after a Trivy scan finds no fixable `HIGH` or `CRITICAL` issue | None. It ships with an SBOM, provenance, and a GitHub attestation |
 | PyPI package | The repo variable `PYPI_PUBLISH` is `true` | Add a trusted publisher on PyPI for this repo, the `release.yml` workflow, and the `pypi` environment |
-| MCP Registry | The repo variable `MCP_REGISTRY_PUBLISH` is `true` | PyPI publishing must work first, because the registry checks the `mcp-name` comment in the package README |
+| MCP Registry | The repo variable `MCP_REGISTRY_PUBLISH` is `true` | PyPI publishing must work first, and the GHCR package must be public, because the registry checks the `mcp-name` comment in the package README and the image label |
 
 ## Release
 
-1. Bump `version` in `pyproject.toml`, and both `version` fields in `server.json`, then run `uv lock`.
+1. Bump `version` in `pyproject.toml`, both `version` fields in `server.json`, and the image tag in its `oci` package `identifier`, then run `uv lock`.
 2. Add the release to `CHANGELOG.md`.
 3. Run `make verify` and `make e2e`.
 4. Merge the change through a pull request, because `main` only accepts pull requests.
@@ -22,7 +22,7 @@ Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It runs lint and te
    git push origin v0.2.0
    ```
 
-The registry name is `io.github.<owner>/<name>`, and GitHub OIDC proves you own it. `tests/unit/test_publishing.py` fails if `server.json` and `pyproject.toml` disagree, or if the README lacks the `mcp-name` comment.
+The registry name is `io.github.<owner>/<name>`, and GitHub OIDC proves you own it. `server.json` lists the PyPI package for stdio and the GHCR image for HTTP, each with its settings. The registry checks the image's `io.modelcontextprotocol.server.name` label, which the `Dockerfile` sets. `tests/unit/test_publishing.py` fails if `server.json`, `pyproject.toml`, and the label disagree, or if the README lacks the `mcp-name` comment.
 
 ## Set up PyPI once
 
