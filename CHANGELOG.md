@@ -4,6 +4,10 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Fixed
+
+- `pik new` with a name that contains the starter's name no longer renames the server name twice, so the Docker image label matches `server.json`.
+
 ## [0.3.0] - 2026-11-12
 
 ### Security
