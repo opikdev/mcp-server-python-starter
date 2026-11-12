@@ -3,12 +3,12 @@
   "name": "io.github.opikdev/mcp-server-python-starter",
   "title": "MCP server Python starter",
   "description": "Production-ready MCP server in Python, with stdio and Streamable HTTP, OAuth, and tool tests",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "mcp-server-python-starter",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -33,7 +33,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/opikdev/mcp-server-python-starter:0.2.0",
+      "identifier": "ghcr.io/opikdev/mcp-server-python-starter:0.3.0",
       "runtimeHint": "docker",
       "runtimeArguments": [
         {

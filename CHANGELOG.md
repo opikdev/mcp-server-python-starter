@@ -4,6 +4,8 @@ All notable changes to this repo are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-12
+
 ### Security
 
 - Over HTTP with OAuth, a tool call without the tool's scope now gets `403` and `WWW-Authenticate: Bearer error="insufficient_scope", scope="…", resource_metadata="…"` before the tool runs, instead of `200` with a tool error. The `401` challenge now names `scope="mcp"`, and adds `error="invalid_token"` only when a token was sent.
